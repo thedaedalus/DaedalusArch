@@ -56,20 +56,24 @@ sudo pacman -S paru
 ```bash 
 curl -fsSL https://install.danklinux.com | sh
 ```
+
 2. Choose options (if in VM choose kitty as the terminal otherwise choose ghostty)
+
 3. Install Greeter
 ```bash
 dms greeter install
 sudo systemctl enable greetd
 ```
+
 ## Customise the install
 1. Install Theme
 ```bash
 paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-icon-theme colloid-cursors qt6ct-kde
 ```
+
 2. Install extra packages
 ```bash 
-paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp
+paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp cachyos-settings inxi spdlog fmt ananicy-cpp cachyos-ananicy-rules wlr-randr bind-tools
 ```
 3. Install Starship prompt
 ```bash
@@ -93,14 +97,18 @@ xdg-user-dirs-update
 cd ~/Pictures
 git clone https://github.com/orangci/walls-catppuccin-mocha.git 
 ```
+
 7. Install Firefox theme
 ```bash
 sudo pywalfox install
 ```
-restart DMS then do below
+8. Restart DMS
 ```bash
 dms restart
 ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 ```
-
+## Gaming Packages
+```bash 
+paru -S cachyos-gaming-applications
+```
      
