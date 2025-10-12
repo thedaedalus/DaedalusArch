@@ -76,8 +76,8 @@
         },
         "break",
         {
-            "type": "de",
-            "key": " DE",
+            "type": "wm",
+            "key": " DE/WM",
             "keyColor": "blue"
         },
         {
