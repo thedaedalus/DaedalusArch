@@ -81,7 +81,7 @@ starship preset catppuccin-powerline -o ~/.config/starship.toml
 mkdir -p ~/.config/fastfetch && cd ~/.config/fastfetch
 fastfetch --gen-config
 rm config.jsonc
-wget  https://raw.githubusercontent.com/harilvfs/fastfetch/refs/heads/old-days/fastfetch/config.jsonc
+wget  https://raw.githubusercontent.com/thedaedalus/DaedalusArch/refs/heads/main/dotfiles/fastfetch/config.jsonc
 ```
 5. Setup XDG Dirs
 ```bash
