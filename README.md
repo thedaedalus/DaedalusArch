@@ -69,7 +69,7 @@ paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-ic
 ```
 2. Install extra packages
 ```bash 
-paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol 
+paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp
 ```
 3. Install Starship prompt
 ```bash
@@ -99,6 +99,7 @@ sudo pywalfox install
 ```
 restart DMS then do below
 ```bash
+dms restart
 ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 ```
 
