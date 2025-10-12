@@ -2,12 +2,12 @@
 This is my setup of Arch without needing to install the full CachyOS stuff 
 
 ## Links
-[Arch Linux](archlinux.org)
-[CahcyOS PKGBUILDS Repo](https://github.com/CachyOS/CachyOS-PKGBUILDS)
-[CachyOS Repo](https://github.com/CachyOS/linux-cachyos)
-[Chaotic-AUR](https://aur.chaotic.cx/docs)
-[Starship Prompt](https://starship.rs)
-[Dank Linux](https://github.com/AvengeMedia/danklinux)
+- [Arch Linux](archlinux.org)
+- [CahcyOS PKGBUILDS Repo](https://github.com/CachyOS/CachyOS-PKGBUILDS)
+- [CachyOS Repo](https://github.com/CachyOS/linux-cachyos)
+- [Chaotic-AUR](https://aur.chaotic.cx/docs)
+- [Starship Prompt](https://starship.rs)
+- [Dank Linux](https://github.com/AvengeMedia/danklinux)
 
 ## Download & Install base Arch
 1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/2025.10.01/archlinux-2025.10.01-x86_64.iso)
