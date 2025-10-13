@@ -2,7 +2,7 @@
 This is my setup of Arch without needing to install the full CachyOS stuff 
 
 ## Links
-- [Arch Linux](archlinux.org)
+- [Arch Linux](https://archlinux.org)
 - [CahcyOS PKGBUILDS Repo](https://github.com/CachyOS/CachyOS-PKGBUILDS)
 - [CachyOS Repo](https://github.com/CachyOS/linux-cachyos)
 - [Chaotic-AUR](https://aur.chaotic.cx/docs)
