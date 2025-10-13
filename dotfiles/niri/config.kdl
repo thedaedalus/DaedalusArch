@@ -34,7 +34,7 @@ input {
 // Find more information on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Outputs
 // Remember to uncomment the node by removing "/-"!
-output "Virtual-1" {
+/-output "Virtual-1" {
     mode "1920x1080"
     variable-refresh-rate
 }
