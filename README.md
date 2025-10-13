@@ -64,6 +64,7 @@ curl -fsSL https://install.danklinux.com | sh
 ```bash
 dms greeter install
 sudo systemctl enable greetd
+sudo reboot now
 ```
 
 ## Customise the install
@@ -74,7 +75,7 @@ paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-ic
 
 2. Install extra packages
 ```bash 
-paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp cachyos-settings inxi spdlog fmt ananicy-cpp cachyos-ananicy-rules wlr-randr bind-tools tealdeer man-db bat
+paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp cachyos-settings inxi spdlog fmt ananicy-cpp cachyos-ananicy-rules wlr-randr bind-tools tealdeer man-db bat eza
 ```
 3. Install Starship prompt
 ```bash
