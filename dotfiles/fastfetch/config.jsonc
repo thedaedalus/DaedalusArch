@@ -133,7 +133,8 @@
         {
             "type": "localip",
             "key": "  IP ",
-            "keyColor": "magenta"
+            "keyColor": "magenta",
+            "format": "{ipv4} ({ifname})"
         },
         {
             "type": "custom",
