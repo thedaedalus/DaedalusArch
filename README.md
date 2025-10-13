@@ -12,9 +12,9 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 ## Download & Install base Arch
 1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
 2. Either add it to [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
-3. run ```archinstall```
-3. choose minimal install and netmanger
-4. after install is finished enter chroot and follow the next steps an switch to the user you created
+3. After computer has booted with Arch live ISO run ```archinstall```
+4. Choose minimal install and netmanger
+5. After install is finished enter chroot and follow the next steps an switch to the user you created
 ```bash
 su - <user> #make sure you change this to your username
 ```
