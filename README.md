@@ -10,7 +10,7 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 - [Dank Linux](https://github.com/AvengeMedia/danklinux)
 
 ## Download & Install base Arch
-1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/2025.10.01/archlinux-2025.10.01-x86_64.iso)
+1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
 2. run ```archinstall```
 3. choose minimal install and netmanger
 4. after install is finished enter chroot and follow the next steps an switch to the user you created
