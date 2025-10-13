@@ -68,7 +68,7 @@ sudo systemctl enable greetd
 ## Customise the install
 1. Install Theme
 ```bash
-paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-icon-theme colloid-cursors qt6ct-kde
+paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-icon-theme colloid-cursors qt6ct-kde breeze
 ```
 
 2. Install extra packages

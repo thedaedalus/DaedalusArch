@@ -91,13 +91,18 @@
             "keyColor": "blue"
         },
         {
-            "type": "wmtheme",
+            "type": "theme",
             "key": "│ ├󰉼",
             "keyColor": "blue"
         },
         {
             "type": "terminal",
-            "key": "└ └",
+            "key": "│ ├",
+            "keyColor": "blue"
+        },
+        {
+            "type": "terminalfont",
+            "key": "└ └",
             "keyColor": "blue"
         },
         {
