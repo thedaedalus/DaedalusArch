@@ -22,11 +22,16 @@ input {
         numlock
     }
     touchpad {
+        tap // Enable tap-to-click
+        natural-scroll // Enable natural (macOS-style) scrolling
     }
     mouse {
     }
     trackpoint {
     }
+    
+    focus-follows-mouse // Automatically focus windows under the mouse pointer
+    workspace-auto-back-and-forth // Enable workspace back & forth switching
 }
 // You can configure outputs by their name, which you can find
 // by running `niri msg outputs` while inside a niri instance.
@@ -37,7 +42,7 @@ input {
 /-output "Virtual-1" {
     mode "1920x1080"
     variable-refresh-rate
-}
+//}
 // Settings that influence how windows are positioned and sized.
 // Find more information on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Layout
@@ -119,12 +124,19 @@ spawn-at-startup "dms" "run"
 spawn-at-startup "/usr/lib/mate-polkit/polkit-mate-authentication-agent-1"
 environment {
   XDG_CURRENT_DESKTOP "niri"
-  QT_QPA_PLATFORM "wayland"
-  ELECTRON_OZONE_PLATFORM_HINT "auto"
-  QT_QPA_PLATFORMTHEME "qt6ct"
+  XDG_SESSION_TYPE "wayland"
+  QT_QPA_PLATFORM "wayland;xcb"
+  QT_QPA_PLATFORMTHEME "qt5ct"
   QT_QPA_PLATFORMTHEME_QT6 "qt6ct"
+  ELECTRON_OZONE_PLATFORM_HINT "wayland"
+  MOZ_ENABLE_WAYLAND "1"
+  QT_WAYLAND_DISABLE_WINDOWDECORATION "1"
   TERMINAL "kitty"
 }
+debug {
+  honor-xdg-activation-with-invalid-serial
+}
+
 hotkey-overlay {
     skip-at-startup
 }
@@ -162,17 +174,51 @@ animations {
         spring damping-ratio=0.85 stiffness=800 epsilon=0.0001
     }
 }
+
+//Workspaces
+
+workspace "browser"
+workspace "terminal"
+workspace "editor"
+workspace "chat"
+workspace "games"
+
 // Window rules let you adjust behavior for individual windows.
 // Find more information on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
 // Work around WezTerm's initial configure bug
 // by setting an empty default-column-width.
 window-rule {
-    // This regular expression is intentionally made as specific as possible,
-    // since this is the default config, and we want no false positives.
-    // You can get away with just app-id="wezterm" if you want.
-    match app-id=r#"^org\.wezfurlong\.wezterm$"#
-    default-column-width {}
+    match app-id="^my.terminal$"
+    opacity 0.95
+    open-maximized true
+    open-on-workspace "terminal"
+}
+window-rule {
+    opacity 0.85
+    open-floating true
+    match app-id=r#"ghostty$"# title="^Ghostty"
+    min-width 1000
+    max-width 1200
+    min-height 750
+    max-height 900
+    //open-on-workspace "terminal"
+}
+window-rule {
+    match app-id=r#"firefox$"#
+    //open-floating true
+    open-maximized true
+    open-on-workspace "browser"
+}
+window-rule {
+    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    open-floating true // Always float Firefox PiP windows
+}
+window-rule {
+    match app-id=r#"firefox$"# title="About Mozilla Firefox"
+    open-floating true
+    opacity 0.95
+    default-floating-position x=32 y=32 relative-to="top-right"
 }
 window-rule {
     match app-id=r#"^org\.gnome\."#
@@ -192,7 +238,6 @@ window-rule {
     match app-id=r#"^galculator$"#
     match app-id=r#"^blueman-manager$"#
     match app-id=r#"^org\.gnome\.Nautilus$"#
-    match app-id=r#"^steam$"#
     match app-id=r#"^xdg-desktop-portal$"#
     open-floating true
 }
@@ -209,9 +254,62 @@ window-rule {
     opacity 0.9
 }
 window-rule {
-    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
-    match app-id="zoom"
+    match app-id=r#"steam$"#
+    open-maximized true
+    open-on-workspace "games"
+}
+window-rule {
+    match app-id=r#"code-oss$"#
+    open-maximized true
+    open-on-workspace "editor"
+}
+window-rule {
+    match app-id=r#"vesktop$"#
+    open-maximized true
+    open-on-workspace "chat"
+}
+layer-rule {
+    match namespace="^quickshell-wallpaper$"
+}
+
+layer-rule {
+    match namespace="^quickshell-overview$"
+    place-within-backdrop true
+}
+layer-rule {
+    match namespace="^launcher$"
+
+    opacity 0.95
+}
+window-rule {
+    // Match by "dropdown" app ID.
+    // You need to set this app ID when running your terminal, e.g.:
+    // spawn "alacritty" "--class" "dropdown"
+    match app-id="^dropdown.terminal$"
+    opacity 0.90
+    // Open it as floating.
     open-floating true
+    // Anchor to the top edge of the screen.
+    default-floating-position x=0 y=10 relative-to="top"
+    // Half of the screen high.
+    default-window-height { proportion 0.5; }
+    // 80% of the screen wide.
+    default-column-width { proportion 1.0; }
+}
+window-rule {
+    match app-id="steam" title=r#"^notificationtoasts_\d+_desktop$"#
+    default-floating-position x=10 y=10 relative-to="bottom-right"
+}
+
+window-rule {
+    match app-id=r#"vesktop$"# title="About Vesktop"
+    open-floating true
+    opacity 0.95
+    min-width 800
+    //max-width 800
+    min-height 750
+    //max-height 900
+    default-floating-position x=32 y=32 relative-to="top-right"
 }
 window-rule {
     geometry-corner-radius 12
@@ -364,11 +462,11 @@ binds {
     Mod+Ctrl+Shift+WheelScrollUp   { move-column-left; }
     
     // === Numbered Workspaces ===
-    Mod+1 { focus-workspace 1; }
-    Mod+2 { focus-workspace 2; }
-    Mod+3 { focus-workspace 3; }
-    Mod+4 { focus-workspace 4; }
-    Mod+5 { focus-workspace 5; }
+    Mod+1 { focus-workspace "browser"; }
+    Mod+2 { focus-workspace "terminal"; }
+    Mod+3 { focus-workspace "editor"; }
+    Mod+4 { focus-workspace "chat"; }
+    Mod+5 { focus-workspace "games"; }
     Mod+6 { focus-workspace 6; }
     Mod+7 { focus-workspace 7; }
     Mod+8 { focus-workspace 8; }
