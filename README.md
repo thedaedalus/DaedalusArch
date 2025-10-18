@@ -33,7 +33,7 @@ tar xvf cachyos-repo.tar.xz && cd cachyos-repo
 sudo ./cachyos-repo.sh
 ```
 
-2. Install the CachyOS kernel
+2.Install the CachyOS kernel
 
 ```bash
 sudo pacman -S linux-cachyos linux-cachyos-headers
