@@ -41,6 +41,11 @@ shopt -s checkwinsize
 shopt -s histappend
 PROMPT_COMMAND='history -a'
 
+shopt -s autocd
+shopt -s cdspell
+bind "set complete-ignore-case on"
+
+
 # set up XDG folders
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -155,24 +160,45 @@ alias bd='cd "$OLDPWD"'
 # Remove a directory and all files
 alias rmd='/bin/rm  --recursive --force --verbose '
 
-# Alias's for multiple directory listing commands
-alias la='ls -Alh'                # show hidden files
-alias ls='ls -aFh --color=always' # add colors and file type extensions
-alias lx='ls -lXBh'               # sort by extension
-alias lk='ls -lSrh'               # sort by size
-alias lc='ls -ltcrh'              # sort by change time
-alias lu='ls -lturh'              # sort by access time
-alias lr='ls -lRh'                # recursive ls
-alias lt='ls -ltrh'               # sort by date
-alias lm='ls -alh |more'          # pipe through 'more'
-alias lw='ls -xAh'                # wide listing format
-alias ll='ls -Fls'                # long listing format
-alias labc='ls -lap'              # alphabetical sort
-alias lf="ls -l | egrep -v '^d'"  # files only
-alias ldir="ls -l | egrep '^d'"   # directories only
-alias lla='ls -Al'                # List and Hidden Files
-alias las='ls -A'                 # Hidden Files
-alias lls='ls -l'                 # List
+if command -v eza > /dev/null 2>&1; then
+  # Use eza for enhanced navigation
+  alias ls='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first' # default ls
+  alias ll='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -l --git -h' # long listing format
+  alias la='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -a' # show hidden files
+  alias lls='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -l --git -h' # List
+  alias las='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -A' # Hidden Files
+  alias lla='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -a -l --git -h' # List and Hidden Files
+  alias lstree='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --tree' # List files with tree view
+  alias ldir='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always -D --show-symlinks' # List directories only
+  alias lk='--color=always --color-scale=all --color-scale-mode=gradient --icons=always l --sort=size' # sort by size
+  alias lx='--color=always --color-scale=all --color-scale-mode=gradient --icons=always l --sort=extension' # sort by extension
+  alias lt='--color=always --color-scale=all --color-scale-mode=gradient --icons=always l --sort=time' # sort by date
+  alias lu='--color=always --color-scale=all --color-scale-mode=gradient --icons=always l --sort=accessed' # sort by access time
+  alias lc='--color=always --color-scale=all --color-scale-mode=gradient --icons=always l --sort=changed' # sort by change time
+  alias lr='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always --group-directories-first -lR --git -h' # recursive ls
+  alias lf='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always -f --show-symlinks'  # files only
+  alias labc='eza --color=always --color-scale=all --color-scale-mode=gradient --icons=always -a --sort=name' # alphabetical sort
+
+else
+    # Fallback to standard ls aliases
+  alias la='ls -Alh'                # show hidden files
+  alias ls='ls -aFh --color=always' # add colors and file type extensions
+  alias lx='ls -lXBh'               # sort by extension
+  alias lk='ls -lSrh'               # sort by size
+  alias lc='ls -ltcrh'              # sort by change time
+  alias lu='ls -lturh'              # sort by access time
+  alias lr='ls -lRh'                # recursive ls
+  alias lt='ls -ltrh'               # sort by date
+  alias lm='ls -alh |more'          # pipe through 'more'
+  alias lw='ls -xAh'                # wide listing format
+  alias ll='ls -Fls'                # long listing format
+  alias labc='ls -lap'              # alphabetical sort
+  alias lf="ls -l | egrep -v '^d'"  # files only
+  alias ldir="ls -l | egrep '^d'"   # directories only
+  alias lla='ls -Al'                # List and Hidden Files
+  alias las='ls -A'                 # Hidden Files
+  alias lls='ls -l'                 # List
+fi
 
 # alias chmod commands
 alias mx='chmod a+x'
@@ -418,7 +444,7 @@ if [ "$DISTRIBUTION" = "redhat" ] || [ "$DISTRIBUTION" = "arch" ]; then
       alias cat='bat'
 else
       alias cat='batcat'
-fi 
+fi
 
 # Show the current version of the operating system
 ver() {
@@ -593,6 +619,18 @@ lazyg() {
 	git commit -m "$1"
 	git push
 }
+
+s () {
+  fzf --ansi --disabled \
+      --bind "change:reload:command \
+          rg --line-number --no-heading --color=always --smart-case {q} \
+          || :" \
+      --bind "enter:execute(${EDITOR:-nano} +{2} {1})" \
+      --delimiter ":" \
+      --preview "command bat -p --color=always {1} --highlight-line {2}" \
+      --preview-window 'up:80%,border-bottom,~3,+{2}+3/3'
+}
+
 
 
 #######################################################
