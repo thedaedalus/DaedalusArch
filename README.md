@@ -33,7 +33,7 @@ tar xvf cachyos-repo.tar.xz && cd cachyos-repo
 sudo ./cachyos-repo.sh
 ```
 
-2.Install the CachyOS kernel
+2. Install the CachyOS kernel
 
 ```bash
 sudo pacman -S linux-cachyos linux-cachyos-headers
@@ -50,14 +50,14 @@ sudo pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.ta
 sudo pacman -U 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
 ```
 
-2.Add the repo to the ```/etc/pacman.conf```
+2. Add the repo to the ```/etc/pacman.conf```
 
 ```bash
 [chaotic-aur]
 Include = /etc/pacman.d/chaotic-mirrorlist
 ```
 
-3.Sync the Repos
+3. Sync the Repos
 
 ```bash
 sudo pacman -Syu
@@ -77,9 +77,9 @@ sudo pacman -S paru
 curl -fsSL https://install.danklinux.com | sh
 ```
 
-2.Choose options (if in VM choose kitty as the terminal otherwise choose ghostty)
+2. Choose options (if in VM choose kitty as the terminal otherwise choose ghostty)
 
-3.Install Greeter
+3. Install Greeter
 
 ```bash
 dms greeter install
@@ -95,20 +95,20 @@ sudo reboot now
 paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-icon-theme colloid-cursors qt6ct-kde breeze
 ```
 
-2.Install extra packages
+2. Install extra packages
 
 ```bash
 paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp cachyos-settings inxi spdlog fmt ananicy-cpp cachyos-ananicy-rules wlr-randr bind-tools tealdeer man-db bat eza yazi fd
 ```
 
-3.Install Starship prompt
+3. Install Starship prompt
 
 ```bash
 curl -sS https://starship.rs/install.sh | sh
 starship preset catppuccin-powerline -o ~/.config/starship.toml
 ```
 
-4.Install Fastfetch theme
+4. Install Fastfetch theme
 
 ```bash
 mkdir -p ~/.config/fastfetch && cd ~/.config/fastfetch
@@ -117,26 +117,26 @@ rm config.jsonc
 wget  https://raw.githubusercontent.com/thedaedalus/DaedalusArch/refs/heads/main/dotfiles/fastfetch/config.jsonc
 ```
 
-5.Setup XDG Dirs
+5. Setup XDG Dirs
 
 ```bash
 xdg-user-dirs-update
 ```
 
-6.Download Wallpapers
+6. Download Wallpapers
 
 ```bash
 cd ~/Pictures
 git clone https://github.com/orangci/walls-catppuccin-mocha.git
 ```
 
-7.Install Firefox theme
+7. Install Firefox theme
 
 ```bash
 sudo pywalfox install
 ```
 
-8.Restart DMS
+8. Restart DMS
 
 ```bash
 dms restart
