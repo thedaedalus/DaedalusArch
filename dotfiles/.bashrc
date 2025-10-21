@@ -83,7 +83,7 @@ if command -v rg &> /dev/null; then
     alias grep='rg'
 else
     # Alias grep to /usr/bin/grep with GREP_OPTIONS if ripgrep is not installed
-    alias grep="/usr/bin/grep $GREP_OPTIONS"
+    alias grep='/usr/bin/grep $GREP_OPTIONS'
 fi
 unset GREP_OPTIONS
 
@@ -219,7 +219,12 @@ alias topcpu="/bin/ps -eo pcpu,pid,user,args | sort -k 1 -r | head -10"
 alias f="find . | grep "
 
 # Count all files (recursively) in the current folder
-alias countfiles="for t in files links directories; do echo \`find . -type \${t:0:1} | wc -l\` \$t; done 2> /dev/null"
+countfiles() {
+    for type in f l d; do
+        count=$(find . -type "$type" | wc -l)
+        echo "$count ${type}$( [ "$type" == "f" ] && echo "iles" || [ "$type" == "l" ] && echo "inks" || echo "irectories")"
+    done
+}
 
 # To see if a command is aliased, a file, or a built-in command
 alias checkcommand="type -t"
