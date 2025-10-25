@@ -174,3 +174,21 @@ ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 ```bash
 paru -S cachyos-gaming-applications
 ```
+
+## Install Dotfiles
+
+Install my dotfiles
+
+```bash
+git clone https://github.com/thedaedalus/DaedalusArch.git
+cd DaedalusArch
+./install
+```
+
+## Final Reboot
+
+```bash
+sudo reboot now
+```
+
+## Enjoy your new Arch install

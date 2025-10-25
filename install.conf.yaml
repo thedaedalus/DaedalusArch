@@ -1,0 +1,42 @@
+# This installs my dotfiles using dotbot
+- defaults:
+    link:
+      create: true
+      relink: true
+# Bash Files
+- link:
+    ~/.bashrc: dotfiles/bash/bashrc
+# Kitty config
+- link:
+    ~/.config/kitty/kitty.conf: dotfiles/kitty/kitty.conf
+    ~/.config/kitty/dank-theme.conf: dotfiles/kitty/dank-theme.conf
+    ~/.config/kitty/theme-catppuccin-macchiato.conf: dotfiles/kitty/theme-catppuccin-macchiato.conf
+    ~/.config/kitty/tabs.conf: dotfiles/kitty/tabs.conf
+# Eza config
+- link:
+    ~/.config/eza/config.yaml: dotfiles/eza/config.yaml
+# fastfetch config
+- link:
+    ~/.config/fastfetch/config.conf: dotfiles/fastfetch/config.conf
+# Niri config
+- link:
+    ~/.config/niri/config.kdl: dotfiles/niri/config.kdl
+    ~/.config/niri/dms/binds.kdl: dotfiles/niri/dms/binds.kdl
+    ~/.config/niri/dms/colors.kdl: dotfiles/niri/dms/colors.kdl
+    ~/.config/niri/dms/layout.kdl: dotfiles/niri/dms/layout.kdl
+
+# Starship config
+- link:
+    ~/.config/starship.toml: dotfiles/starship/starship.toml
+# tealdeer config
+# (though tealdeer also works without a config file)
+- link:
+    ~/.config/tldr/config.toml: dotfiles/tldr/config.toml
+# zed config
+- link:
+    ~/.config/zed/config.json: dotfiles/zed/config.json
+    ~/.config/zed/keymap.json: dotfiles/zed/keymap.json
+    ~/.config/zed/tasks.json: dotfiles/zed/tasks.json
+
+# Clean symlinks which have moved
+- clean: ["~", "~/.config/"]
