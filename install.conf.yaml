@@ -20,10 +20,10 @@
     ~/.config/kitty/tabs.conf: dotfiles/kitty/tabs.conf
 # Eza config
 - link:
-    ~/.config/eza/config.yaml: dotfiles/eza/config.yaml
+    ~/.config/eza/config.yml: dotfiles/eza/config.yml
 # fastfetch config
 - link:
-    ~/.config/fastfetch/config.conf: dotfiles/fastfetch/config.conf
+    ~/.config/fastfetch/config.jsonc: dotfiles/fastfetch/config.jsonc
 # Niri config
 - link:
     ~/.config/niri/config.kdl: dotfiles/niri/config.kdl
@@ -37,7 +37,7 @@
 # tealdeer config
 # (though tealdeer also works without a config file)
 - link:
-    ~/.config/tldr/config.toml: dotfiles/tldr/config.toml
+    ~/.config/tealdeer/config.toml: dotfiles/tealdeer/config.toml
 # zed config
 - link:
     ~/.config/zed/config.json: dotfiles/zed/config.json
