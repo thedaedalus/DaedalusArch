@@ -1,0 +1,11 @@
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "space l": [
+        "task::Spawn",
+        { "task_name": "LazyGit", "reveal_target": "center" }
+      ]
+    }
+  }
+]
