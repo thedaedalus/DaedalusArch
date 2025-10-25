@@ -127,14 +127,21 @@ paru -S sassc gtk-engine-murrine gnome-themes-extra colloid-gtk-theme colloid-ic
 paru -S brightnessctl  wl-clipboard cava cliphist gammastep cosmic-edit-git cosmic-files-git fastfetch ddcutil imagemagick fzf ttf-meslo-nerd zoxide ripgrep bash-completion multitail tree trash-cli wget firefox cachyos-firefox-settings xdg-user-dirs pipewire-audio python-pywalfox wireplumber pwvucontrol jq grim slurp cachyos-settings inxi spdlog fmt ananicy-cpp cachyos-ananicy-rules wlr-randr bind-tools tealdeer man-db bat eza yazi fd zed laygit github-cli
 ```
 
-3. Install Starship prompt
+3. Install my dotfiles using [Dotbot](https://github.com/anishathalye/dotbot)
+
+```bash
+git clone https://github.com/thedaedalus/DaedalusArch.git
+cd DaedalusArch
+./install
+```
+
+4. Install Starship prompt
 
 ```bash
 curl -sS https://starship.rs/install.sh | sh
-starship preset catppuccin-powerline -o ~/.config/starship.toml
 ```
 
-4. Install Fastfetch theme
+5. Install Fastfetch theme
 
 ```bash
 mkdir -p ~/.config/fastfetch && cd ~/.config/fastfetch
@@ -143,26 +150,26 @@ rm config.jsonc
 wget  https://raw.githubusercontent.com/thedaedalus/DaedalusArch/refs/heads/main/dotfiles/fastfetch/config.jsonc
 ```
 
-5. Setup XDG Dirs
+6. Setup XDG Dirs
 
 ```bash
 xdg-user-dirs-update
 ```
 
-6. Download Wallpapers
+7. Download Wallpapers
 
 ```bash
 cd ~/Pictures
 git clone https://github.com/orangci/walls-catppuccin-mocha.git
 ```
 
-7. Install Firefox theme
+8. Install Firefox theme
 
 ```bash
 sudo pywalfox install
 ```
 
-8. Restart DMS
+9. Restart DMS
 
 ```bash
 dms restart
@@ -173,16 +180,6 @@ ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 
 ```bash
 paru -S cachyos-gaming-applications
-```
-
-## Install Dotfiles
-
-Install my dotfiles
-
-```bash
-git clone https://github.com/thedaedalus/DaedalusArch.git
-cd DaedalusArch
-./install
 ```
 
 ## Final Reboot
