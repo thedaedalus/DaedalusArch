@@ -10,6 +10,8 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 - [Chaotic-AUR](https://aur.chaotic.cx/docs)
 - [Starship Prompt](https://starship.rs)
 - [Dank Linux](https://github.com/AvengeMedia/danklinux)
+- [Dotbot](https://github.com/anishathalye/dotbot)
+- [Ventoy](https://www.ventoy.net/en/index.html)
 
 ## Download & Install base Arch
 
