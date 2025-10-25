@@ -39,6 +39,32 @@ sudo ./cachyos-repo.sh
 sudo pacman -S linux-cachyos linux-cachyos-headers
 ```
 
+4. Reboot into the new kernel
+
+```bash
+exit #exit chroot
+exit #exit live environment
+sudo reboot now
+```
+
+## Enable SSH
+
+1. Login to your new Arch install and enable SSH
+
+```bash
+sudo systemctl enable --now sshd
+```
+2. Find your IP address
+
+```bash
+ip a
+```
+3. From another computer SSH into your Arch install
+
+```bash
+ssh <user>@<ip-address>
+```
+
 ## Install Chaotic Aur
 
 1. Install the repo
