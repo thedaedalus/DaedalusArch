@@ -43,7 +43,7 @@ PROMPT_COMMAND='history -a'
 
 shopt -s autocd
 shopt -s cdspell
-bind "set complete-ignore-case on"
+
 
 
 # set up XDG folders
