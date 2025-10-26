@@ -201,6 +201,7 @@ install_cachyos_repo() {
   fi
 
   TMPDIR="$(mktemp -d /tmp/cachyos-repo.XXXX)"
+  echo $TMPDIR
   cleanup() { rm -rf "$TMPDIR"; }
   trap cleanup EXIT
 
