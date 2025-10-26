@@ -14,7 +14,7 @@ echo -ne "
 -------------------------------------------------------------------------
                     Automated Arch Linux Installer
 -------------------------------------------------------------------------
-
+"
 Verifying Arch Linux ISO is Booted
 "
 
@@ -116,8 +116,9 @@ select_option() {
     return $selected
 }
 
-# @description Displays ArchTitus logo
+# @description Displays  logo
 # @noargs
+
 logo () {
 # This will be shown on every set as user is progressing
 
@@ -295,7 +296,7 @@ userinfo () {
     export NAME_OF_MACHINE=$name_of_machine
 }
 
-locale () { 
+locale () {
     # ask for locale settings
     echo -ne "
     Please select your locale setting from this list
