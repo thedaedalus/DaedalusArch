@@ -13,7 +13,29 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 - [Dotbot](https://github.com/anishathalye/dotbot)
 - [Ventoy](https://www.ventoy.net/en/index.html)
 
-## Download & Install base Arch
+## Automated Install
+
+### Download & Install base Arch
+
+1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
+2. Either add it to a [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
+3. After computer has booted with Arch live ISO run ```archinstall```
+4. Choose minimal install and netmanger
+5. After install is finished enter chroot and follow the next steps and switch to the user you created
+
+### Run the install script
+
+If you want to automate the install using my script run the following command after installing base Arch
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/install.sh | sh
+```
+
+
+
+## Manual Install
+
+### Download & Install base Arch
 
 1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
 2. Either add it to a [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
@@ -25,7 +47,7 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 su - <user> #make sure you change this to your username
 ```
 
-## Install CachyOS Repos
+### Install CachyOS Repos
 
 1. Download the script and run it
 
@@ -49,7 +71,7 @@ exit #exit live environment
 sudo reboot now
 ```
 
-## Enable SSH
+### Enable SSH
 
 1. Login to your new Arch install and enable SSH
 
@@ -69,7 +91,7 @@ ip a
 ssh <user>@<ip-address>
 ```
 
-## Install Chaotic Aur
+### Install Chaotic Aur
 
 1. Install the repo
 
@@ -93,13 +115,13 @@ Include = /etc/pacman.d/chaotic-mirrorlist
 sudo pacman -Syu
 ```
 
-## Install Paru
+### Install Paru
 
 ```bash
 sudo pacman -S paru
 ```
 
-## Install Dank Linux
+### Install Dank Linux
 
 1. Run the script
 
@@ -117,7 +139,7 @@ sudo systemctl enable greetd
 sudo reboot now
 ```
 
-## Customise the install
+### Customise the install
 
 1. Install Theme
 
@@ -180,16 +202,16 @@ dms restart
 ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 ```
 
-## Gaming Packages
+### Gaming Packages
 
 ```bash
 paru -S cachyos-gaming-applications
 ```
 
-## Final Reboot
+### Final Reboot
 
 ```bash
 sudo reboot now
 ```
 
-## Enjoy your new Arch install
+### Enjoy your new Arch install
