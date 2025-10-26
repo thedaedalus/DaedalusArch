@@ -69,7 +69,6 @@ install_repos() {
     require_cmd curl
     require_cmd tar
     require_cmd find
-    require_cmd grep
 
     tmpdir="$(mktemp -d)"
     _tmpfiles+=("$tmpdir")
@@ -83,9 +82,6 @@ install_repos() {
         return 1
     fi
 
-    echo "Listing archive contents (tar -tf):"
-    tar -tf cachyos-repo.tar.xz | sed -n '1,200p'
-
     echo "Extracting archive..."
     if ! tar -xf cachyos-repo.tar.xz; then
         echo "Failed to extract cachyos-repo.tar.xz"
@@ -93,33 +89,41 @@ install_repos() {
         return 1
     fi
 
-    echo "Files extracted (showing up to depth 5):"
-    find . -maxdepth 5 -print
-
-    # Look for common install script names
-    SCRIPT_PATH="$(find . -type f \( -iname 'cachyos-repo.sh' -o -iname 'install.sh' -o -iname '*cachyos*' -o -iname 'setup.sh' \) | head -n1 || true)"
-
-    # If nothing found by name, search file contents for 'cachyos'
+    # Try to find the installer script anywhere in the extracted tree
+    SCRIPT_PATH="$(find . -type f -iname 'cachyos-repo.sh' | head -n1 || true)"
     if [[ -z "$SCRIPT_PATH" ]]; then
-        echo "No common script name found; searching files that mention 'cachyos'..."
-        SCRIPT_PATH="$(grep -RIl 'cachyos' . | head -n1 || true)"
-    fi
-
-    if [[ -z "$SCRIPT_PATH" ]]; then
-        echo "No installer script located. Please inspect the extracted files above."
+        echo "cachyos-repo.sh not found in archive. Listing extracted files for inspection:"
+        # show the extracted tree to help debugging
+        find . -maxdepth 3 -print
         popd >/dev/null
         return 1
     fi
 
+    echo "Found installer at: $SCRIPT_PATH"
     chmod +x "$SCRIPT_PATH"
+
+    # Run the script with sudo (script may require root)
+    echo "Running $SCRIPT_PATH (with sudo)..."
     if ! sudo "$SCRIPT_PATH"; then
         echo "Execution of $SCRIPT_PATH failed"
         popd >/dev/null
         return 1
     fi
 
+    # Continue with key import and chaotic repo setup
+    sudo pacman-key --keyserver hkps://keyserver.ubuntu.com --recv-keys 3056513887B78AEB
+    sudo pacman-key --lsign-key 3056513887B78AEB
+
+    sudo pacman -U --noconfirm "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst"
+    sudo pacman -U --noconfirm "https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst"
+
+    if ! grep -q "^\[chaotic-aur\]" /etc/pacman.conf; then
+        echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
+    else
+        echo "chaotic-aur already configured in /etc/pacman.conf"
+    fi
+
     popd >/dev/null
-    echo "Repository installer executed (if present)."
 }
 
 
@@ -293,8 +297,7 @@ setup_pacman() {
 
     # Enable multilib section (uncomment bracket and include line)
     if ! grep -q "^\[multilib\]" "$conf"; then
-        sudo sed -i '/^\s*#\s*\[multilib\]/s/^\s*#\s*//' "$conf"
-        sudo sed -i '/^\s*#\s*Include = \/etc\/pacman.d\/mirrorlist/s/^\s*#\s*//' "$conf"
+        sed -i "/\[multilib\]/,/Include/"'s/^#//' "$conf"
     fi
 }
 
