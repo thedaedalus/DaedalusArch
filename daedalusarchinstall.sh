@@ -111,18 +111,6 @@ install_repos() {
         return 1
     fi
 
-    echo "Candidate installer script: $SCRIPT_PATH"
-    echo "First 80 lines of the candidate (for quick inspection):"
-    sed -n '1,80p' "$SCRIPT_PATH" || true
-
-    # Ask user to confirm execution
-    read -r -p "Execute this candidate script? [y/N] " yn
-    if [[ ! "$yn" =~ ^[Yy]$ ]]; then
-        echo "Execution cancelled. Inspect $tmpdir to decide which file should be run."
-        popd >/dev/null
-        return 1
-    fi
-
     chmod +x "$SCRIPT_PATH"
     if ! sudo "$SCRIPT_PATH"; then
         echo "Execution of $SCRIPT_PATH failed"
