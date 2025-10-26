@@ -142,6 +142,11 @@ run_as_user() {
 
 # Helper to run a command as root using sudo (will error if sudo not available)
 # Command output is appended to the timestamped logfile.
+# This helper prefers an interactive sudo prompt. If no TTY is available, and an
+# askpass helper is provided via the SUDO_ASKPASS or ASKPASS environment
+# variables, sudo will be invoked with -A to use that helper.
+# To minimize repeated prompts we validate the sudo timestamp once per run.
+SUDO_VALIDATED=false
 run_root() {
   if [ "${DRY_RUN:-false}" = true ]; then
     printf '[DRYRUN] as root: %s\n' "$*"
@@ -151,11 +156,38 @@ run_root() {
   fi
 
   if [ "$(id -u)" -eq 0 ]; then
-    # PID 1 is root on the host; run command and tee output to logfile
+    # Already root; run the command and tee output to logfile
     bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
+    return $?
+  fi
+
+  # Try to validate sudo credential cache once. If validation fails because no
+  # TTY is present, fall back to using an askpass helper if one is configured.
+  if [ "${SUDO_VALIDATED}" != "true" ]; then
+    if sudo -v 2>/dev/null; then
+      SUDO_VALIDATED=true
+    else
+      if [ -n "${SUDO_ASKPASS-}" ] || [ -n "${ASKPASS-}" ]; then
+        # Prefer SUDO_ASKPASS if set, otherwise use ASKPASS
+        ASK=${SUDO_ASKPASS:-$ASKPASS}
+        export SUDO_ASKPASS="$ASK"
+        # Mark validated so we attempt sudo -A below
+        SUDO_VALIDATED=true
+        echo "[+] Using askpass helper: $ASK" >> "$LOGFILE"
+      else
+        # No TTY and no askpass helper — let sudo try anyway (it may fail)
+        echo "[!] sudo validation failed and no askpass helper configured; attempting sudo which may fail in non-interactive contexts" >> "$LOGFILE"
+      fi
+    fi
+  fi
+
+  # If an askpass helper is configured in the environment, use sudo -A so it
+  # calls the helper to obtain a password. Otherwise use normal sudo which
+  # will prompt on the controlling TTY.
+  if [ -n "${SUDO_ASKPASS-}" ]; then
+    sudo -A bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
   else
-    # use sudo to run as root; capture output to logfile
-    sudo -S bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
+    sudo bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
   fi
 }
 
@@ -169,8 +201,8 @@ install_cachyos_repo() {
   fi
 
   TMPDIR="$(mktemp -d /tmp/cachyos-repo.XXXX)"
-  cleanup() { rm -rf "$TMPDIR"; }
-  trap cleanup EXIT
+  #cleanup() { rm -rf "$TMPDIR"; }
+  #trap cleanup EXIT
 
   cd "$TMPDIR"
   if curl -fsSLO "https://mirror.cachyos.org/cachyos-repo.tar.xz"; then
