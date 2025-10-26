@@ -68,6 +68,7 @@ install_repos() {
     print_message "Setting up CachyOS & Chaotic AUR repositories..."
     require_cmd curl
     require_cmd tar
+    require_cmd find
 
     tmpdir="$(mktemp -d)"
     _tmpfiles+=("$tmpdir")
@@ -81,20 +82,35 @@ install_repos() {
         return 1
     fi
 
+    echo "Extracting archive..."
     if ! tar -xf cachyos-repo.tar.xz; then
         echo "Failed to extract cachyos-repo.tar.xz"
         popd >/dev/null
         return 1
     fi
 
-    if [[ -x ./cachyos-repo/cachyos-repo.sh ]]; then
-        sudo ./cachyos-repo/cachyos-repo.sh
-    else
-        echo "cachyos-repo.sh not found or not executable"
+    # Try to find the installer script anywhere in the extracted tree
+    SCRIPT_PATH="$(find . -type f -iname 'cachyos-repo.sh' | head -n1 || true)"
+    if [[ -z "$SCRIPT_PATH" ]]; then
+        echo "cachyos-repo.sh not found in archive. Listing extracted files for inspection:"
+        # show the extracted tree to help debugging
+        find . -maxdepth 3 -print
         popd >/dev/null
         return 1
     fi
 
+    echo "Found installer at: $SCRIPT_PATH"
+    chmod +x "$SCRIPT_PATH"
+
+    # Run the script with sudo (script may require root)
+    echo "Running $SCRIPT_PATH (with sudo)..."
+    if ! sudo "$SCRIPT_PATH"; then
+        echo "Execution of $SCRIPT_PATH failed"
+        popd >/dev/null
+        return 1
+    fi
+
+    # Continue with key import and chaotic repo setup
     sudo pacman-key --keyserver hkps://keyserver.ubuntu.com --recv-keys 3056513887B78AEB
     sudo pacman-key --lsign-key 3056513887B78AEB
 
@@ -109,6 +125,7 @@ install_repos() {
 
     popd >/dev/null
 }
+
 
 
 install_packages() {
