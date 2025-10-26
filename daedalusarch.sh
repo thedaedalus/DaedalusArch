@@ -393,6 +393,16 @@ if [ "$ASSUME_YES" = false ]; then
   read -rp "Username [$USERNAME]: " _tmp < /dev/tty
   if [ -n "$_tmp" ]; then USERNAME="$_tmp"; fi
 
+  # Password prompts if needed (recommend files)
+  if [ -z "${ROOT_PASS:-}" ]; then
+    if [ "$ASSUME_YES" = true ]; then err "Root password required in non-interactive mode (use --root-pass-file)"; exit 1; fi
+    read -rsp "Root password: " ROOT_PASS < /dev/tty; echo
+  fi
+  if [ -z "${USER_PASS:-}" ]; then
+    if [ "$ASSUME_YES" = true ]; then err "User password required in non-interactive mode (use --user-pass-file)"; exit 1; fi
+    read -rsp "User password: " USER_PASS < /dev/tty; echo
+  fi
+
   read -rp "Bootloader (grub|systemd-boot) [$BOOTLOADER]: " _tmp < /dev/tty
   if [ -n "$_tmp" ]; then BOOTLOADER="$_tmp"; fi
 
@@ -410,12 +420,17 @@ if [ "$ASSUME_YES" = false ]; then
       ;;
   esac
 
+
   # If LUKS is selected and no passphrase provided via CLI/files, prompt for one
   if [ "$USE_LUKS" = true ] && [ -z "${LUKS_PASS:-}" ]; then
     read -rsp "LUKS passphrase: " LUKS_PASS < /dev/tty
     echo
   fi
 
+  if [ "$USE_LUKS" = true ] && [ -z "${LUKS_PASS:-}" ]; then
+    if [ "$ASSUME_YES" = true ]; then err "LUKS passphrase required in non-interactive mode (use --luks-pass-file)"; exit 1; fi
+    read -rsp "LUKS passphrase: " LUKS_PASS < /dev/tty; echo
+  fi
   read -rp "LV filesystem (ext4|xfs|btrfs) [$LV_FS]: " _tmp < /dev/tty
   if [ -n "$_tmp" ]; then LV_FS="$_tmp"; fi
 
@@ -438,19 +453,7 @@ if [ "$ASSUME_YES" = false ]; then
   if [ -n "$_tmp" ]; then VCONSOLE_FONT_MAP="$_tmp"; fi
 fi
 
-# Password prompts if needed (recommend files)
-if [ -z "${ROOT_PASS:-}" ]; then
-  if [ "$ASSUME_YES" = true ]; then err "Root password required in non-interactive mode (use --root-pass-file)"; exit 1; fi
-  read -rsp "Root password: " ROOT_PASS < /dev/tty; echo
-fi
-if [ -z "${USER_PASS:-}" ]; then
-  if [ "$ASSUME_YES" = true ]; then err "User password required in non-interactive mode (use --user-pass-file)"; exit 1; fi
-  read -rsp "User password: " USER_PASS < /dev/tty; echo
-fi
-if [ "$USE_LUKS" = true ] && [ -z "${LUKS_PASS:-}" ]; then
-  if [ "$ASSUME_YES" = true ]; then err "LUKS passphrase required in non-interactive mode (use --luks-pass-file)"; exit 1; fi
-  read -rsp "LUKS passphrase: " LUKS_PASS < /dev/tty; echo
-fi
+
 
 # Final destructive confirmation
 if [ "$ASSUME_YES" = false ]; then
@@ -547,9 +550,36 @@ sgdisk --zap-all "$DISK" || warn "sgdisk --zap-all returned non-zero; continuing
 
 PART_SUFFIX=""
 if [[ "$DISK" =~ nvme ]]; then PART_SUFFIX="p"; fi
+
+# Create GPT partitions if they don't already exist:
+#  - partition 1: EFI System (512M)
+#  - partition 2: root (remaining space)
+info "Creating GPT partitions on $DISK: 1=EFI 2GB, 2=ROOT (rest)"
+if ! sgdisk -n1:0:+512M -t1:ef00 -c1:"EFI System" "$DISK" >/dev/null 2>&1; then
+  warn "sgdisk: could not create EFI partition (it may already exist or sgdisk failed). Attempting to continue."
+fi
+if ! sgdisk -n2:0:0 -t2:8300 -c2:"Linux Root" "$DISK" >/dev/null 2>&1; then
+  warn "sgdisk: could not create root partition (it may already exist or sgdisk failed). Attempting to continue."
+fi
+
+# Ask kernel to re-read partition table / ensure device nodes exist
+if command -v partprobe >/dev/null 2>&1; then
+  partprobe "$DISK" 2>/dev/null || true
+fi
+sleep 1
+
 PART_EFI="${DISK}${PART_SUFFIX}1"
 PART_ROOT="${DISK}${PART_SUFFIX}2"
 
+# Wait briefly for partition device nodes to appear (best-effort)
+for i in 1 2 3 4 5; do
+  if [ -b "$PART_EFI" ] && [ -b "$PART_ROOT" ]; then
+    break
+  fi
+  sleep 1
+done
+
+# Create EFI filesystem
 mkfs.fat -F32 "$PART_EFI"
 
 # If LUKS is requested, leave PART_ROOT raw for LUKS; otherwise mkfs based on choice (ext4)
