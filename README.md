@@ -1,6 +1,6 @@
 # Install Arch with Dank Shell and CachyOS repos
 
-This is my setup of Arch without needing to install the full CachyOS stuff
+This is my setup of Arch without needing to install the full CachyOS distro but still using their repos and kernel along with Dank Linux shell and my dotfiles.
 
 ## Links
 
@@ -28,10 +28,8 @@ This is my setup of Arch without needing to install the full CachyOS stuff
 If you want to automate the install using my script run the following command after installing base Arch
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/post_install.sh | sh
 ```
-
-
 
 ## Manual Install
 
