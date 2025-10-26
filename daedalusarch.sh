@@ -486,8 +486,64 @@ fi
 
 # Partitioning and filesystems
 set -x
-wipefs -a "$DISK" || true
-sgdisk --zap-all "$DISK" || true
+
+# Attempt to free the device before wipefs/sgdisk: unmount mounts, swapoff, deactivate LVM, close crypt mappings
+DISK_BASENAME="$(basename "$DISK" 2>/dev/null || true)"
+if [ -n "$DISK_BASENAME" ]; then
+  info "Attempting to unmount partitions and deactivate mappings on $DISK..."
+  # Unmount any mounted partitions belonging to the disk
+  while IFS= read -r part; do
+    dev="/dev/${part}"
+    # If mounted, try lazy unmount then regular unmount
+    mnt="$(lsblk -n -o MOUNTPOINT "$dev" 2>/dev/null || true)"
+    if [ -n "$mnt" ]; then
+      warn "Unmounting $dev (mounted at $mnt)..."
+      umount -l "$dev" 2>/dev/null || umount "$dev" 2>/dev/null || true
+    fi
+    # Disable swap on partition if it's used as swap
+    if awk '{print $1}' /proc/swaps 2>/dev/null | grep -qx "$dev"; then
+      warn "Turning off swap on $dev..."
+      swapoff "$dev" 2>/dev/null || true
+    fi
+  done < <(lsblk -ln -o NAME "${DISK}" 2>/dev/null | tail -n +2 || true)
+
+  # Deactivate LVM volumes and VGs if any PVs are on this disk
+  if command -v pvs >/dev/null 2>&1 && command -v vgchange >/dev/null 2>&1; then
+    # Find PVs that reference the disk basename
+    for pv in $(pvs --noheadings -o pv_name 2>/dev/null | awk '{print $1}' | grep "${DISK_BASENAME}" || true); do
+      # Try to find VG and deactivate
+      vg=$(pvs --noheadings -o vg_name "$pv" 2>/dev/null | awk '{print $1}' || true)
+      if [ -n "$vg" ]; then
+        warn "Deactivating VG $vg ..."
+        lvchange -an "/dev/$vg" 2>/dev/null || true
+        vgchange -an "$vg" 2>/dev/null || true
+      fi
+    done
+    # Best-effort: deactivate all VGs to release devices
+    vgchange -an 2>/dev/null || true
+  fi
+
+  # Close cryptsetup mappings whose underlying device lives on this disk
+  if command -v cryptsetup >/dev/null 2>&1 && [ -d /dev/mapper ]; then
+    for map in $(ls /dev/mapper 2>/dev/null || true); do
+      if cryptsetup status "$map" >/dev/null 2>&1; then
+        # attempt to extract the backing device path from status output
+        backing="$(cryptsetup status "$map" 2>/dev/null | awk '/device:/ {print $2}' || true)"
+        if [ -n "$backing" ] && echo "$backing" | grep -q "${DISK_BASENAME}"; then
+          warn "Closing crypt mapping $map which references $backing ..."
+          cryptsetup close "$map" 2>/dev/null || true
+        fi
+      fi
+    done
+  fi
+fi
+
+# Give the kernel a moment to release resources
+sleep 1
+
+# Now attempt wipefs/sgdisk
+wipefs -a "$DISK" || warn "wipefs returned non-zero; continuing"
+sgdisk --zap-all "$DISK" || warn "sgdisk --zap-all returned non-zero; continuing"
 
 PART_SUFFIX=""
 if [[ "$DISK" =~ nvme ]]; then PART_SUFFIX="p"; fi
