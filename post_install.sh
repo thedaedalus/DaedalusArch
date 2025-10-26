@@ -201,15 +201,15 @@ install_cachyos_repo() {
   fi
 
   TMPDIR="$(mktemp -d /tmp/cachyos-repo.XXXX)"
-  echo $TMPDIR
+  log "$TMPDIR"
   cleanup() { rm -rf "$TMPDIR"; }
   trap cleanup EXIT
 
-  cd "$TMPDIR/cachyos-repo" || err "Failed to enter temp dir for cachyos-repo install"
+  cd "$TMPDIR"
   if curl -fsSLO "https://mirror.cachyos.org/cachyos-repo.tar.xz"; then
     tar xvf cachyos-repo.tar.xz
-    if [ -f "./cachyos-repo.sh" ]; then
-      run_root "./cachyos-repo.sh"
+    if [ -f "./cachyos-repo/cachyos-repo.sh" ]; then
+      run_root "./cachyos-repo/cachyos-repo.sh"
     else
       err "cachyos-repo.sh not found in archive; aborting cachyos repo install step"
     fi
