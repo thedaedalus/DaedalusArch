@@ -54,6 +54,7 @@ sudo reboot now
 1. Login to your new Arch install and enable SSH
 
 ```bash
+sudo pacman -S openssh
 sudo systemctl enable --now sshd
 ```
 
