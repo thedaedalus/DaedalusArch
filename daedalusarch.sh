@@ -34,6 +34,7 @@ LOCALES="en_US.UTF-8"      # comma-separated list of locales to generate
 VCONSOLE_KEYMAP="us"
 VCONSOLE_FONT=""
 VCONSOLE_FONT_MAP=""
+DRY_RUN=false
 LOG_FILE="$DEFAULT_LOG"
 NO_COLOR=false
 ASSUME_YES=false
@@ -91,6 +92,7 @@ Options:
   --vconsole-keymap MAP       Console keymap for /etc/vconsole.conf (default: $VCONSOLE_KEYMAP)
   --vconsole-font FONT        Console font for /etc/vconsole.conf (optional)
   --vconsole-font-map MAP     Console FONT_MAP for /etc/vconsole.conf (optional)
+  --dry-run                   Print planned actions and exit (no destructive changes)
   --root-pass PASS            Root password (insecure on CLI)
   --root-pass-file FILE       Read root password from file (recommended)
   --user-pass PASS            User password (insecure on CLI)
@@ -142,6 +144,8 @@ while [ $# -gt 0 ]; do
     --vconsole-font=*) VCONSOLE_FONT="${1#*=}"; shift;;
     --vconsole-font-map) VCONSOLE_FONT_MAP="$2"; shift 2;;
     --vconsole-font-map=*) VCONSOLE_FONT_MAP="${1#*=}"; shift;;
+    --dry-run) DRY_RUN=true; shift;;
+    --dry-run=*) DRY_RUN=true; shift;;
     --root-pass) ROOT_PASS="$2"; shift 2;;
     --root-pass=*) ROOT_PASS="${1#*=}"; shift;;
     --root-pass-file) ROOT_PASS_FILE="$2"; shift 2;;
@@ -257,10 +261,25 @@ if [ "$SECURE_WIPE" = "dd" ]; then
   fi
 fi
 
-# Validate timezone availability (tolerant: warn and continue if missing)
+# Validate timezone availability
 if [ -n "${TIMEZONE:-}" ]; then
   if [ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]; then
-    warn "Timezone '/usr/share/zoneinfo/${TIMEZONE}' not found on live system. The installed system may still accept it; continuing."
+    if [ "$ASSUME_YES" = true ]; then
+      err "Timezone '/usr/share/zoneinfo/${TIMEZONE}' not found on live system. In non-interactive mode provide a valid --timezone."
+      exit 1
+    else
+      warn "Timezone '/usr/share/zoneinfo/${TIMEZONE}' not found on live system."
+      read -rp "Continue with '$TIMEZONE' anyway? [y/N]: " _tzreply < /dev/tty
+      if [[ ! "$_tzreply" =~ ^[Yy]$ ]]; then
+        read -rp "Enter an alternative timezone (or press Enter to keep '$TIMEZONE'): " _alt_tz < /dev/tty
+        if [ -n "$_alt_tz" ]; then
+          TIMEZONE="$_alt_tz"
+          if [ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]; then
+            warn "Alternate timezone '/usr/share/zoneinfo/${TIMEZONE}' not found; will default to UTC in installed system."
+          fi
+        fi
+      fi
+    fi
   fi
 fi
 
@@ -285,7 +304,7 @@ if [ -n "${VCONSOLE_KEYMAP:-}" ]; then
       exit 1
     else
       warn "vconsole keymap '$VCONSOLE_KEYMAP' not found under /usr/share/kbd/keymaps. You may get a wrong keymap in the installed system."
-      read -rp "Continue anyway? [y/N]: " _reply
+      read -rp "Continue anyway? [y/N]: " _reply < /dev/tty
       if [[ ! "$_reply" =~ ^[Yy]$ ]]; then
         err "Aborted by user due to missing keymap."
         exit 1
@@ -293,6 +312,37 @@ if [ -n "${VCONSOLE_KEYMAP:-}" ]; then
     fi
   else
     info "vconsole keymap '$VCONSOLE_KEYMAP' found."
+  fi
+fi
+
+# Validate vconsole font exists under /usr/share/kbd/consolefonts (if provided)
+if [ -n "${VCONSOLE_FONT:-}" ]; then
+  found_font=false
+  if [ -d /usr/share/kbd/consolefonts ]; then
+    if ls /usr/share/kbd/consolefonts/"${VCONSOLE_FONT}"* >/dev/null 2>&1; then found_font=true; fi
+  fi
+
+  if [ "$found_font" = false ]; then
+    if [ "$ASSUME_YES" = true ]; then
+      err "vconsole font '${VCONSOLE_FONT}' not found under /usr/share/kbd/consolefonts. Provide a valid --vconsole-font in non-interactive mode."
+      exit 1
+    else
+      warn "vconsole font '${VCONSOLE_FONT}' not found under /usr/share/kbd/consolefonts."
+      read -rp "Continue without setting font? [y/N]: " _freply < /dev/tty
+      if [[ ! \"$_freply\" =~ ^[Yy]$ ]]; then
+        read -rp "Enter alternative vconsole font (or leave empty to skip): " _alt_font < /dev/tty
+        if [ -n \"$_alt_font\" ]; then
+          VCONSOLE_FONT=\"$_alt_font\"
+          # quick check
+          if ! ls /usr/share/kbd/consolefonts/\"${VCONSOLE_FONT}\"* >/dev/null 2>&1; then
+            warn "Alternate font not found; continuing without font."
+            VCONSOLE_FONT=\"\"
+          fi
+        fi
+      fi
+    fi
+  else
+    info "vconsole font '${VCONSOLE_FONT}' found."
   fi
 fi
 
@@ -318,7 +368,7 @@ if [ -n "${USER_PASS_FILE:-}" ]; then
   USER_PASS="$(<"$USER_PASS_FILE")"
 fi
 
-# Prompt for missing minimal things if interactive
+# Prompt for minimal things and allow overriding defaults in interactive mode
 if [ -z "$DISK" ]; then
   if [ "$ASSUME_YES" = true ]; then
     err "--disk is required in non-interactive mode."
@@ -326,32 +376,105 @@ if [ -z "$DISK" ]; then
   fi
   info "Detected block devices:"
   lsblk -dno NAME,SIZE,MODEL | sed 's/^/  /' || true
-  read -rp "Enter disk to partition (e.g. /dev/sda or /dev/nvme0n1): " DISK
+  read -rp "Enter disk to partition (e.g. /dev/sda or /dev/nvme0n1): " DISK < /dev/tty
+else
+  # If a disk was provided but we're interactive, give the user a chance to override it
+  if [ "$ASSUME_YES" = false ]; then
+    read -rp "Target disk [$DISK] (leave empty to keep): " _tmp < /dev/tty
+    if [ -n "$_tmp" ]; then DISK="$_tmp"; fi
+  fi
 fi
-if [ -z "$HOSTNAME" ]; then read -rp "Hostname: " HOSTNAME; fi
-if [ -z "$USERNAME" ]; then read -rp "Username: " USERNAME; fi
+
+# Prompt interactively for common options even when defaults exist (only in interactive mode)
+if [ "$ASSUME_YES" = false ]; then
+  read -rp "Hostname [$HOSTNAME]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then HOSTNAME="$_tmp"; fi
+
+  read -rp "Username [$USERNAME]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then USERNAME="$_tmp"; fi
+
+  read -rp "Bootloader (grub|systemd-boot) [$BOOTLOADER]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then BOOTLOADER="$_tmp"; fi
+
+  # Ask whether to use LUKS+LVM (default reflects current value)
+  read -rp "Use LUKS+LVM for root? [y/N] " _tmp < /dev/tty
+  case "$_tmp" in
+    [Yy]*)
+      USE_LUKS=true
+      ;;
+    [Nn]|'')
+      USE_LUKS=false
+      ;;
+    *)
+      USE_LUKS=false
+      ;;
+  esac
+
+  # If LUKS is selected and no passphrase provided via CLI/files, prompt for one
+  if [ "$USE_LUKS" = true ] && [ -z "${LUKS_PASS:-}" ]; then
+    read -rsp "LUKS passphrase: " LUKS_PASS < /dev/tty
+    echo
+  fi
+
+  read -rp "LV filesystem (ext4|xfs|btrfs) [$LV_FS]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then LV_FS="$_tmp"; fi
+
+  read -rp "Secure wipe whole disk? (none|dd) [$SECURE_WIPE]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then SECURE_WIPE="$_tmp"; fi
+
+  read -rp "Timezone [$TIMEZONE]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then TIMEZONE="$_tmp"; fi
+
+  read -rp "Locales (comma-separated) [$LOCALES]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then LOCALES="$_tmp"; fi
+
+  read -rp "vconsole keymap [$VCONSOLE_KEYMAP]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then VCONSOLE_KEYMAP="$_tmp"; fi
+
+  read -rp "vconsole font (optional) [$VCONSOLE_FONT]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then VCONSOLE_FONT="$_tmp"; fi
+
+  read -rp "vconsole font map (optional) [$VCONSOLE_FONT_MAP]: " _tmp < /dev/tty
+  if [ -n "$_tmp" ]; then VCONSOLE_FONT_MAP="$_tmp"; fi
+fi
 
 # Password prompts if needed (recommend files)
 if [ -z "${ROOT_PASS:-}" ]; then
   if [ "$ASSUME_YES" = true ]; then err "Root password required in non-interactive mode (use --root-pass-file)"; exit 1; fi
-  read -rsp "Root password: " ROOT_PASS; echo
+  read -rsp "Root password: " ROOT_PASS < /dev/tty; echo
 fi
 if [ -z "${USER_PASS:-}" ]; then
   if [ "$ASSUME_YES" = true ]; then err "User password required in non-interactive mode (use --user-pass-file)"; exit 1; fi
-  read -rsp "User password: " USER_PASS; echo
+  read -rsp "User password: " USER_PASS < /dev/tty; echo
 fi
 if [ "$USE_LUKS" = true ] && [ -z "${LUKS_PASS:-}" ]; then
   if [ "$ASSUME_YES" = true ]; then err "LUKS passphrase required in non-interactive mode (use --luks-pass-file)"; exit 1; fi
-  read -rsp "LUKS passphrase: " LUKS_PASS; echo
+  read -rsp "LUKS passphrase: " LUKS_PASS < /dev/tty; echo
 fi
 
 # Final destructive confirmation
 if [ "$ASSUME_YES" = false ]; then
   warn "About to wipe and repartition disk: $DISK"
-  read -rp "Type 'YES' to continue: " CONF
+  read -rp "Type 'YES' to continue: " CONF < /dev/tty
   if [ "$CONF" != "YES" ]; then err "Aborted."; exit 1; fi
 else
   info "--yes specified: proceeding non-interactively."
+fi
+
+# Dry-run mode: print planned actions and exit without making changes
+if [ "$DRY_RUN" = true ]; then
+  info "DRY-RUN: planned actions (no changes will be made):"
+  echo "  Target disk: $DISK"
+  echo "  Secure wipe: $SECURE_WIPE"
+  echo "  Use LUKS+LVM: $USE_LUKS"
+  echo "  VG: $VG_NAME  LV: $LV_NAME  LV FS: $LV_FS"
+  echo "  Bootloader: $BOOTLOADER"
+  echo "  Timezone: $TIMEZONE"
+  echo "  Locales: $LOCALES"
+  echo "  vconsole keymap: $VCONSOLE_KEYMAP  font: ${VCONSOLE_FONT:-}(none)  font_map: ${VCONSOLE_FONT_MAP:-}(none)"
+  echo "  Will install packages: base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font"
+  echo "Dry-run complete."
+  exit 0
 fi
 
 # Optional secure wipe whole disk
@@ -715,7 +838,7 @@ if [ "$ASSUME_YES" = true ]; then
   exit 0
 fi
 
-read -rp "Unmount /mnt and reboot now? Type YES to unmount & reboot: " FINAL
+read -rp "Unmount /mnt and reboot now? Type YES to unmount & reboot: " FINAL < /dev/tty
 if [ "$FINAL" = "YES" ]; then
   info "Unmounting /mnt..."
   umount -R /mnt || warn "umount failed; unmount manually"
