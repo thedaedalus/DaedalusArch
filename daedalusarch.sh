@@ -391,7 +391,7 @@ mount "$PART_EFI" "$mount_point/boot"
 info "Pacstrap installing base system (may take a while)..."
 
 # Build pacstrap package list
-PKGS=(base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font-ttf)
+PKGS=(base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font)
 if [ "$USE_LUKS" = true ]; then
   PKGS+=(cryptsetup lvm2)
 fi
