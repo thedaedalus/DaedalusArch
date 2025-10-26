@@ -9,11 +9,13 @@ set -euo pipefail
 # - Optional secure whole-disk wipe (dd)
 # - Secure overwrite-before-delete of generated chroot helper
 # - Logging to file with optional no-color output
+# - Support multiple locales, vconsole keymap validation, vconsole font/font_map
 #
 # WARNING: This script is destructive. Test in a VM and run as root from an Arch live environment.
 
 PROGNAME="$(basename "$0")"
 DEFAULT_LOG="/tmp/daedalusarch.log"
+VERSION="0.5"
 
 # Defaults
 DISK=""
@@ -27,11 +29,18 @@ VG_NAME="vg0"
 LV_NAME="root"
 LV_FS="ext4"               # ext4, xfs, btrfs
 SECURE_WIPE="none"         # none or dd
+TIMEZONE="UTC"
+LOCALES="en_US.UTF-8"      # comma-separated list of locales to generate
+VCONSOLE_KEYMAP="us"
+VCONSOLE_FONT=""
+VCONSOLE_FONT_MAP=""
 LOG_FILE="$DEFAULT_LOG"
 NO_COLOR=false
 ASSUME_YES=false
 AUTO_REBOOT=false
 NO_CLEANUP=false
+
+POST_INSTALL_URL="https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/post_install.sh"
 
 # Utilities: colored output unless NO_COLOR true; also log to file if LOG_FILE set
 _log() {
@@ -77,6 +86,11 @@ Options:
   --lv-name NAME              LVM LV name for root (default: $LV_NAME)
   --lv-fs ext4|xfs|btrfs      Filesystem for LV (default: $LV_FS)
   --secure-wipe none|dd       Secure wipe whole disk before partitioning (dd zeros) (default: none)
+  --timezone TZ               Timezone (e.g. 'UTC' or 'America/New_York'; default: $TIMEZONE)
+  --locales LOCALES           Comma-separated locales to generate (default: $LOCALES)
+  --vconsole-keymap MAP       Console keymap for /etc/vconsole.conf (default: $VCONSOLE_KEYMAP)
+  --vconsole-font FONT        Console font for /etc/vconsole.conf (optional)
+  --vconsole-font-map MAP     Console FONT_MAP for /etc/vconsole.conf (optional)
   --root-pass PASS            Root password (insecure on CLI)
   --root-pass-file FILE       Read root password from file (recommended)
   --user-pass PASS            User password (insecure on CLI)
@@ -118,6 +132,16 @@ while [ $# -gt 0 ]; do
     --lv-fs=*) LV_FS="${1#*=}"; shift;;
     --secure-wipe) SECURE_WIPE="$2"; shift 2;;
     --secure-wipe=*) SECURE_WIPE="${1#*=}"; shift;;
+    --timezone) TIMEZONE="$2"; shift 2;;
+    --timezone=*) TIMEZONE="${1#*=}"; shift;;
+    --locales) LOCALES="$2"; shift 2;;
+    --locales=*) LOCALES="${1#*=}"; shift;;
+    --vconsole-keymap) VCONSOLE_KEYMAP="$2"; shift 2;;
+    --vconsole-keymap=*) VCONSOLE_KEYMAP="${1#*=}"; shift;;
+    --vconsole-font) VCONSOLE_FONT="$2"; shift 2;;
+    --vconsole-font=*) VCONSOLE_FONT="${1#*=}"; shift;;
+    --vconsole-font-map) VCONSOLE_FONT_MAP="$2"; shift 2;;
+    --vconsole-font-map=*) VCONSOLE_FONT_MAP="${1#*=}"; shift;;
     --root-pass) ROOT_PASS="$2"; shift 2;;
     --root-pass=*) ROOT_PASS="${1#*=}"; shift;;
     --root-pass-file) ROOT_PASS_FILE="$2"; shift 2;;
@@ -137,30 +161,45 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Welcome banner (interactive-only)
+print_banner() {
+  # Skip banner in non-interactive mode
+  if [ "$ASSUME_YES" = true ]; then
+    return 0
+  fi
+
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local disk_disp
+  if [ -n "$DISK" ]; then disk_disp="$DISK"; else disk_disp="(not specified yet)"; fi
+
+  if [ "$NO_COLOR" = false ]; then
+    printf '\033[0;36m'
+  fi
+
+  cat <<'BANNER'
+  ____                 _       _              _             _
+ |  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
+ | | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
+ | |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
+ |____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
+BANNER
+
+  if [ "$NO_COLOR" = false ]; then
+    printf '\033[0m'
+  fi
+
+  printf 'Version: %s  Date: %s  Target disk: %s  TZ: %s  Locales: %s  Keymap: %s  Font: %s  FontMap: %s\n' \
+    "$VERSION" "$now" "$disk_disp" "$TIMEZONE" "$LOCALES" "$VCONSOLE_KEYMAP" "${VCONSOLE_FONT:-(none)}" "${VCONSOLE_FONT_MAP:-(none)}"
+}
+
+# Print banner now (after parsing so --no-color is effective)
+print_banner
+
 # Basic env checks
 if [ "$(id -u)" -ne 0 ]; then
   err "This script must be run as root from an Arch live environment."
   exit 1
-fi
-# Welcome banner
-if [ "$NO_COLOR" = false ]; then
-  printf '\033[0;32m'
-  cat <<'BANNER'
-  ____                 _       _              _             _
- |  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
- | | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
- | |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
- |____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
-BANNER
-  printf '\033[0m\n'
-else
-  cat <<'BANNER'
-  ____                 _       _              _             _
- |  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
- | | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
- | |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
- |____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
-BANNER
 fi
 
 # Validate some choices early
@@ -217,6 +256,53 @@ if [ "$SECURE_WIPE" = "dd" ]; then
     exit 1
   fi
 fi
+
+# Validate timezone availability (tolerant: warn and continue if missing)
+if [ -n "${TIMEZONE:-}" ]; then
+  if [ ! -f "/usr/share/zoneinfo/${TIMEZONE}" ]; then
+    warn "Timezone '/usr/share/zoneinfo/${TIMEZONE}' not found on live system. The installed system may still accept it; continuing."
+  fi
+fi
+
+# Validate vconsole keymap against /usr/share/kbd/keymaps (warn or fail)
+if [ -n "${VCONSOLE_KEYMAP:-}" ]; then
+  # Try to find a keymap file that matches the keymap name
+  found_keymap=false
+  if [ -d /usr/share/kbd/keymaps ]; then
+    # Many distributions store keymaps under subdirectories; search for a matching filename
+    # We do a simple file name match (keymap.map.gz or keymap.map), or directory name containing the keymap
+    while IFS= read -r -d '' f; do
+      fname="$(basename "$f")"
+      case "$fname" in
+        "$VCONSOLE_KEYMAP" | "$VCONSOLE_KEYMAP".map | "$VCONSOLE_KEYMAP".map.gz) found_keymap=true; break ;;
+      esac
+    done < <(find /usr/share/kbd/keymaps -type f -print0 2>/dev/null || true)
+  fi
+
+  if [ "$found_keymap" = false ]; then
+    if [ "$ASSUME_YES" = true ]; then
+      err "vconsole keymap '$VCONSOLE_KEYMAP' not found under /usr/share/kbd/keymaps. Exiting (non-interactive mode)."
+      exit 1
+    else
+      warn "vconsole keymap '$VCONSOLE_KEYMAP' not found under /usr/share/kbd/keymaps. You may get a wrong keymap in the installed system."
+      read -rp "Continue anyway? [y/N]: " _reply
+      if [[ ! "$_reply" =~ ^[Yy]$ ]]; then
+        err "Aborted by user due to missing keymap."
+        exit 1
+      fi
+    fi
+  else
+    info "vconsole keymap '$VCONSOLE_KEYMAP' found."
+  fi
+fi
+
+# Basic locale sanity check for first provided locale (warn only)
+IFS=',' read -r -a _LOCALES_ARR <<< "$LOCALES"
+first_locale="${_LOCALES_ARR[0]}"
+case "$first_locale" in
+  *.*) ;; # looks like LANG.CHARSET
+  *) warn "First locale '$first_locale' does not match expected pattern like en_US.UTF-8." ;;
+esac
 
 # Read secret files if provided
 if [ -n "${LUKS_PASS_FILE:-}" ]; then
@@ -285,12 +371,6 @@ if [[ "$DISK" =~ nvme ]]; then PART_SUFFIX="p"; fi
 PART_EFI="${DISK}${PART_SUFFIX}1"
 PART_ROOT="${DISK}${PART_SUFFIX}2"
 
-parted --script "$DISK" mklabel gpt \
-  mkpart primary fat32 1MiB 513MiB \
-  mkpart primary 513MiB 100% \
-  set 1 boot on \
-  set 1 esp on
-
 mkfs.fat -F32 "$PART_EFI"
 
 # If LUKS is requested, leave PART_ROOT raw for LUKS; otherwise mkfs based on choice (ext4)
@@ -311,11 +391,10 @@ mount "$PART_EFI" "$mount_point/boot"
 info "Pacstrap installing base system (may take a while)..."
 
 # Build pacstrap package list
-PKGS=(base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools)
+PKGS=(base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font-ttf)
 if [ "$USE_LUKS" = true ]; then
   PKGS+=(cryptsetup lvm2)
 fi
-
 pacstrap /mnt "${PKGS[@]}" --noconfirm
 
 info "Generating /etc/fstab..."
@@ -376,14 +455,54 @@ USER_PASS_HASH='__USER_PASS_HASH__'
 POST_INSTALL_URL='__POST_INSTALL_URL__'
 REMOVE_FINISH='__REMOVE_FINISH__'
 DISK_PLACEHOLDER='__DISK__'
+TIMEZONE='__TIMEZONE__'
+LOCALES='__LOCALES__'
+VCONSOLE_KEYMAP='__VCONSOLE__'
+VCONSOLE_FONT='__VCONSOLE_FONT__'
+VCONSOLE_FONT_MAP='__VCONSOLE_FONT_MAP__'
 
 log "Configuring basic system settings..."
-ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+# Timezone
+if [ -n "__TIMEZONE__" ] && [ -f "/usr/share/zoneinfo/__TIMEZONE__" ]; then
+  ln -sf /usr/share/zoneinfo/__TIMEZONE__ /etc/localtime
+else
+  ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+  log "WARNING: requested timezone not available; UTC applied"
+fi
 hwclock --systohc
 
-echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+# Locales: generate one or more locales
+if [ -n "__LOCALES__" ]; then
+  IFS=',' read -ra LOCALES_ARR <<< "__LOCALES__"
+  : > /etc/locale.gen
+  for L in "${LOCALES_ARR[@]}"; do
+    L_TRIM=$(echo "$L" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -n "$L_TRIM" ]; then
+      echo "$L_TRIM UTF-8" >> /etc/locale.gen
+    fi
+  done
+else
+  echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+fi
 locale-gen
-echo LANG=en_US.UTF-8 > /etc/locale.conf
+# Set LANG to first locale
+if [ -n "__LOCALES__" ]; then
+  FIRST_LOCALE=$(echo "__LOCALES__" | cut -d',' -f1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  echo "LANG=$FIRST_LOCALE" > /etc/locale.conf
+else
+  echo "LANG=en_US.UTF-8" > /etc/locale.conf
+fi
+
+# vconsole keymap, font, font map
+if [ -n "__VCONSOLE__" ]; then
+  echo "KEYMAP=__VCONSOLE__" > /etc/vconsole.conf
+fi
+if [ -n "__VCONSOLE_FONT__" ] && [ "__VCONSOLE_FONT__" != "''" ]; then
+  echo "FONT=__VCONSOLE_FONT__" >> /etc/vconsole.conf
+fi
+if [ -n "__VCONSOLE_FONT_MAP__" ] && [ "__VCONSOLE_FONT_MAP__" != "''" ]; then
+  echo "FONT_MAP=__VCONSOLE_FONT_MAP__" >> /etc/vconsole.conf
+fi
 
 echo "$HOSTNAME" > /etc/hostname
 cat >> /etc/hosts <<HOSTS
@@ -518,8 +637,13 @@ esc_USER_PASS_HASH=$(escape_for_sed "$USER_PASS_HASH")
 esc_POST_INSTALL_URL=$(escape_for_sed "$POST_INSTALL_URL")
 esc_REMOVE_FINISH=$(escape_for_sed "$([ "$NO_CLEANUP" = true ] && echo "false" || echo "true")")
 esc_DISK=$(escape_for_sed "$DISK")
+esc_TIMEZONE=$(escape_for_sed "$TIMEZONE")
+esc_LOCALES=$(escape_for_sed "$LOCALES")
+esc_VCONSOLE=$(escape_for_sed "$VCONSOLE_KEYMAP")
+esc_VCONSOLE_FONT=$(escape_for_sed "${VCONSOLE_FONT:-}")
+esc_VCONSOLE_FONT_MAP=$(escape_for_sed "${VCONSOLE_FONT_MAP:-}")
 
-# Replace placeholders
+# Replace placeholders in the chroot helper
 sed -i "s#__HOSTNAME__#${esc_HOSTNAME}#g" /mnt/root/finish_chroot.sh
 sed -i "s#__USERNAME__#${esc_USERNAME}#g" /mnt/root/finish_chroot.sh
 sed -i "s#__BOOTLOADER__#${esc_BOOTLOADER}#g" /mnt/root/finish_chroot.sh
@@ -533,6 +657,11 @@ sed -i "s#__USER_PASS_HASH__#${esc_USER_PASS_HASH}#g" /mnt/root/finish_chroot.sh
 sed -i "s#__POST_INSTALL_URL__#${esc_POST_INSTALL_URL}#g" /mnt/root/finish_chroot.sh
 sed -i "s#__REMOVE_FINISH__#${esc_REMOVE_FINISH}#g" /mnt/root/finish_chroot.sh
 sed -i "s#__DISK__#${esc_DISK}#g" /mnt/root/finish_chroot.sh
+sed -i "s#__TIMEZONE__#${esc_TIMEZONE}#g" /mnt/root/finish_chroot.sh
+sed -i "s#__LOCALES__#${esc_LOCALES}#g" /mnt/root/finish_chroot.sh
+sed -i "s#__VCONSOLE__#${esc_VCONSOLE}#g" /mnt/root/finish_chroot.sh
+sed -i "s#__VCONSOLE_FONT__#${esc_VCONSOLE_FONT}#g" /mnt/root/finish_chroot.sh
+sed -i "s#__VCONSOLE_FONT_MAP__#${esc_VCONSOLE_FONT_MAP}#g" /mnt/root/finish_chroot.sh
 
 chmod +x /mnt/root/finish_chroot.sh
 
@@ -569,7 +698,7 @@ secure_remove_live
 # Unset sensitive variables on live environment
 unset ROOT_PASS USER_PASS ROOT_PASS_HASH USER_PASS_HASH LUKS_PASS LUKS_PASS_FILE 2>/dev/null || true
 
-ok "Installation complete."
+ok "Installation flow complete."
 
 # Final unmount / reboot behavior
 if [ "$AUTO_REBOOT" = true ]; then
