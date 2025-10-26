@@ -305,9 +305,36 @@ install_paru() {
 # ---------- Step 6: Install Dank Linux ----------
 install_danklinux() {
   log "Installing Dank Linux (interactive installer)..."
-  # This runs install script from the network; it's interactive.
-  run_as_user "curl -fsSL https://install.danklinux.com | sh"
-  log "If the Dank Linux installer required manual choices, please complete them."
+
+  local URL="https://install.danklinux.com"
+  local TMPDIR
+  TMPDIR="$(mktemp -d /tmp/danklinux-installer.XXXX)"
+  # ensure cleanup of tempdir
+  cleanup_dank() { rm -rf "$TMPDIR"; }
+  trap cleanup_dank RETURN
+
+  local installer="$TMPDIR/install-dank.sh"
+
+  log "Downloading Dank Linux installer from $URL ..."
+  if ! curl -fsSLo "$installer" "$URL"; then
+    err "Failed to download installer from $URL; skipping Dank Linux install"
+    summary_add error "danklinux: download failed"
+    return 1
+  fi
+
+  chmod +x "$installer"
+  log "Installer saved to $installer"
+
+  # Run the installer as the regular user. Use an interactive bash (-i) so prompts
+  # can read from the user's TTY where possible. run_as_user will capture output
+  # to the logfile.
+  if run_as_user "bash -i '$installer'"; then
+    summary_add installed "danklinux:installer ran"
+    log "Dank Linux installer finished. If it required manual choices, please complete them."
+  else
+    log "Dank Linux installer returned non-zero (it may require manual interaction)."
+    summary_add action "danklinux installer returned non-zero or requires manual steps"
+  fi
 }
 
 # ---------- Step 7: Install greeter and enable greetd ----------
