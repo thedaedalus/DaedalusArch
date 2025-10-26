@@ -87,8 +87,8 @@ install_repos() {
         return 1
     fi
 
-    if [[ -x ./cachyos-repo.sh ]]; then
-        sudo ./cachyos-repo.sh
+    if [[ -x ./cachyos-repo/cachyos-repo.sh ]]; then
+        sudo ./cachyos-repo/cachyos-repo.sh
     else
         echo "cachyos-repo.sh not found or not executable"
         popd >/dev/null
