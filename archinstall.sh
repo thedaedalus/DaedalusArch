@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Automated Arch Linux Installer - improved LUKS handling, safer checks, and fixes
+# Automated Arch Linux Installer - updated to read prompts from /dev/tty so interactive prompts work when piped.
 # NOTE: This script is interactive and destructive. Review before running.
 
 set -euo pipefail
@@ -35,6 +35,7 @@ root_check() {
 }
 
 docker_check() {
+    # Try to detect docker via cgroup or /.dockerenv
     if awk -F/ '$2 == "docker"' /proc/self/cgroup | read -r; then
         echo -ne "ERROR! Docker container is not supported (at the moment)\n"
         exit 1
@@ -67,11 +68,13 @@ background_checks() {
 }
 
 # Read arrow-key menu and return index as function return
+# All reads on menus are redirected from /dev/tty so the script works when piped.
 select_option() {
     local options=("$@")
     local num_options=${#options[@]}
     local selected=0
     local last_selected=-1
+    local key esc_seq
 
     while true; do
         # Move cursor up to the start of the menu
@@ -92,28 +95,56 @@ select_option() {
 
         last_selected=$selected
 
-        # Read user input
-        read -rsn1 key
-        case $key in
-            $'\x1b') # ESC sequence
-                read -rsn2 -t 0.1 key
-                case $key in
-                    '[A') # Up arrow
-                        ((selected--))
-                        if [ $selected -lt 0 ]; then
-                            selected=$((num_options - 1))
-                        fi
-                        ;;
-                    '[B') # Down arrow
-                        ((selected++))
-                        if [ $selected -ge $num_options ]; then
-                            selected=0
-                        fi
-                        ;;
-                esac
+        # Read a single byte/char from the controlling terminal so the script works over SSH and when piped.
+        # If read fails, key will be empty; guard against set -e by using || true.
+        read -rsn1 key < /dev/tty || key=''
+
+        # If we received an ESC, read the rest of the escape sequence (longer timeout, don't overwrite 'key')
+        if [[ "$key" == $'\x1b' ]]; then
+            # read up to 3 additional bytes (most terminal sequences are short) with a slightly longer timeout for SSH latency
+            read -rsn3 -t 0.25 esc_seq < /dev/tty || esc_seq=''
+            case "$esc_seq" in
+                '[A'*) # Up arrow
+                    ((selected--))
+                    if [ $selected -lt 0 ]; then
+                        selected=$((num_options - 1))
+                    fi
+                    ;;
+                '[B'*) # Down arrow
+                    ((selected++))
+                    if [ $selected -ge $num_options ]; then
+                        selected=0
+                    fi
+                    ;;
+                *)
+                    # Unrecognized escape sequence: ignore
+                    ;;
+            esac
+            # Loop to redraw menu after handling arrow
+            continue
+        fi
+
+        # Detect Enter (newline or carriage return) or empty key (fallback)
+        if [[ "$key" == $'\n' || "$key" == $'\r' || -z "$key" ]]; then
+            break
+        fi
+
+        # Allow vi-like shortcuts over SSH: 'k' = up, 'j' = down
+        case "$key" in
+            'k')
+                ((selected--))
+                if [ $selected -lt 0 ]; then
+                    selected=$((num_options - 1))
+                fi
                 ;;
-            '') # Enter key
-                break
+            'j')
+                ((selected++))
+                if [ $selected -ge $num_options ]; then
+                    selected=0
+                fi
+                ;;
+            *)
+                # ignore other keys
                 ;;
         esac
     done
@@ -122,15 +153,17 @@ select_option() {
 }
 
 # helper: prompt for a password and export to variable name given
+# read from /dev/tty so piping the script doesn't break prompts
 set_password() {
     local varname="$1"
     while true; do
-        read -rs -p "Please enter password for ${varname}: " pass1
+        read -rs -p "Please enter password for ${varname}: " pass1 < /dev/tty || true
         echo
-        read -rs -p "Please re-enter password for ${varname}: " pass2
+        read -rs -p "Please re-enter password for ${varname}: " pass2 < /dev/tty || true
         echo
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            export "${varname}"="$pass1"
+            # Use declare -x to set environment variable by name
+            declare -x "$varname=$pass1"
             break
         fi
         echo "Passwords don't match or are empty. Try again."
@@ -194,12 +227,12 @@ timezone () {
                 export TIMEZONE="$time_zone"
             else
                 echo "No detected timezone. Please enter manually."
-                read -r new_timezone
+                read -r new_timezone < /dev/tty || true
                 export TIMEZONE="$new_timezone"
             fi
             ;;
         1)
-            read -r -p "Please enter your desired timezone (e.g. Europe/London): " new_timezone
+            read -r -p "Please enter your desired timezone (e.g. Europe/London): " new_timezone < /dev/tty || true
             export TIMEZONE="$new_timezone"
             echo "${TIMEZONE} set as timezone"
             ;;
@@ -275,7 +308,7 @@ echo -ne "
 userinfo () {
     # username
     while true; do
-        read -r -p "Please enter username: " username
+        read -r -p "Please enter username: " username < /dev/tty || true
         if [[ "${username,,}" =~ ^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$ ]]; then
             break
         fi
@@ -283,16 +316,16 @@ userinfo () {
     done
     export USERNAME=$username
 
-    # password
+    # password - uses set_password which reads from /dev/tty
     set_password "PASSWORD"
 
     # hostname
     while true; do
-        read -r -p "Please name your machine: " name_of_machine
+        read -r -p "Please name your machine: " name_of_machine < /dev/tty || true
         if [[ "${name_of_machine,,}" =~ ^[a-z][a-z0-9_.-]{0,62}[a-z0-9]$ ]]; then
             break
         fi
-        read -r -p "Hostname doesn't seem correct. Do you still want to save it? (y/n) " force
+        read -r -p "Hostname doesn't seem correct. Do you still want to save it? (y/n) " force < /dev/tty || true
         if [[ "${force,,}" = "y" ]]; then
             break
         fi
@@ -523,7 +556,7 @@ fi
 gpu_type=$(lspci | grep -E "VGA|3D|Display" || true)
 
 # Use arch-chroot and pass environment variables explicitly; use a single-quoted heredoc so outer shell doesn't expand variables.
-arch-chroot /mnt /usr/bin/env KEYMAP="${KEYMAP}" TIMEZONE="${TIMEZONE}" LOCALE="${LOCALE}" /bin/bash -s <<'EOF_CHROOT'
+arch-chroot /mnt /usr/bin/env KEYMAP="${KEYMAP:-}" TIMEZONE="${TIMEZONE:-}" LOCALE="${LOCALE:-}" /bin/bash -s <<'EOF_CHROOT'
 set -euo pipefail
 IFS=$'\n\t'
 
