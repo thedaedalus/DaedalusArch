@@ -600,11 +600,11 @@ mount "$PART_EFI" "$mount_point/boot"
 info "Pacstrap installing base system (may take a while)..."
 
 # Build pacstrap package list
-PKGS=(base linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font)
+PKGS=(base base-devel linux linux-firmware sudo git networkmanager base-devel curl grub efibootmgr dosfstools terminus-font)
 if [ "$USE_LUKS" = true ]; then
   PKGS+=(cryptsetup lvm2)
 fi
-pacstrap /mnt "${PKGS[@]}" --noconfirm
+pacstrap /mnt "${PKGS[@]}" --noconfirm --needed
 
 info "Generating /etc/fstab..."
 genfstab -U /mnt > /mnt/etc/fstab
@@ -737,6 +737,29 @@ cat > /etc/sudoers.d/wheel <<'SUDO'
 %wheel ALL=(ALL) ALL
 SUDO
 chmod 0440 /etc/sudoers.d/wheel || true
+
+echo -ne "
+-------------------------------------------------------------------------
+                    Setting up mirrors for optimal download
+-------------------------------------------------------------------------
+"
+pacman -S --noconfirm --needed pacman-contrib curl terminus-font
+pacman -S --noconfirm --needed reflector rsync grub arch-install-scripts git ntp wget
+cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak
+
+nc=$(grep -c ^"cpu cores" /proc/cpuinfo)
+echo -ne "
+-------------------------------------------------------------------------
+                    You have " $nc" cores. And
+            changing the makeflags for " $nc" cores. Aswell as
+                changing the compression settings.
+-------------------------------------------------------------------------
+"
+TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+if [[  $TOTAL_MEM -gt 8000000 ]]; then
+sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
+sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
+fi
 
 log "Enabling NetworkManager..."
 systemctl enable NetworkManager
