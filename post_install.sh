@@ -155,7 +155,7 @@ run_root() {
     bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
   else
     # use sudo to run as root; capture output to logfile
-    sudo bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
+    sudo -S bash -lc "$* 2>&1 | tee -a '$LOGFILE'"
   fi
 }
 

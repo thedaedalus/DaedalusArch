@@ -721,9 +721,22 @@ cat >> /etc/hosts <<HOSTS
 HOSTS
 
 log "Creating user and setting hashed passwords..."
-useradd -m -G wheel -s /bin/bash "$USERNAME" || true
+# Determine supplementary groups; include libvirt if the group exists on the system
+SUPP_GROUPS="wheel"
+if getent group libvirt >/dev/null 2>&1; then
+  SUPP_GROUPS="${SUPP_GROUPS},libvirt"
+  log "Detected 'libvirt' group; adding user to: $SUPP_GROUPS"
+fi
+useradd -m -G "$SUPP_GROUPS" -s /bin/bash "$USERNAME" || true
 echo "root:$ROOT_PASS_HASH" | chpasswd -e || true
 echo "$USERNAME:$USER_PASS_HASH" | chpasswd -e || true
+
+log "Configuring sudoers for the wheel group..."
+# Allow members of the wheel group to run any command via sudo (require password)
+cat > /etc/sudoers.d/wheel <<'SUDO'
+%wheel ALL=(ALL) ALL
+SUDO
+chmod 0440 /etc/sudoers.d/wheel || true
 
 log "Enabling NetworkManager..."
 systemctl enable NetworkManager
