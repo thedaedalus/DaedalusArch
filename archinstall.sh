@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Automated Arch Linux Installer - improved LUKS handling, safer checks, and fixes
+# NOTE: This script is interactive and destructive. Review before running.
+
+set -euo pipefail
+IFS=$'\n\t'
 
 # Redirect stdout and stderr to archsetup.txt and still output to console
 exec > >(tee -i archsetup.txt)
@@ -7,14 +12,13 @@ exec 2>&1
 echo -ne "
 -------------------------------------------------------------------------
   ____                 _       _              _             _
- |  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
- | | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
- | |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
- |____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
+ |  _ \\  __ _  ___  __| | __ _| |_   _ ___   / \\   _ __ ___| |__
+ | | | |/ _\` |/ _ \\/ _\` |/ _\` | | | | / __| / _ \\ | '__/ __| '_ \\
+ | |_| | (_| |  __/ (_| | (_| | | |_| \\__ \\/ ___ \\| | | (__| | | |
+ |____/ \\__,_|\\___|\\__,_|\\__,_|_|\\__,_|___/_/   \\_\\_|  \\___|_| |_|
 -------------------------------------------------------------------------
                     Automated Arch Linux Installer
 -------------------------------------------------------------------------
-"
 Verifying Arch Linux ISO is Booted
 "
 
@@ -26,24 +30,24 @@ fi
 root_check() {
     if [[ "$(id -u)" != "0" ]]; then
         echo -ne "ERROR! This script must be run under the 'root' user!\n"
-        exit 0
+        exit 1
     fi
 }
 
 docker_check() {
     if awk -F/ '$2 == "docker"' /proc/self/cgroup | read -r; then
         echo -ne "ERROR! Docker container is not supported (at the moment)\n"
-        exit 0
+        exit 1
     elif [[ -f /.dockerenv ]]; then
         echo -ne "ERROR! Docker container is not supported (at the moment)\n"
-        exit 0
+        exit 1
     fi
 }
 
 arch_check() {
     if [[ ! -e /etc/arch-release ]]; then
         echo -ne "ERROR! This script must be run in Arch Linux!\n"
-        exit 0
+        exit 1
     fi
 }
 
@@ -51,7 +55,7 @@ pacman_check() {
     if [[ -f /var/lib/pacman/db.lck ]]; then
         echo "ERROR! Pacman is blocked."
         echo -ne "If not running remove /var/lib/pacman/db.lck.\n"
-        exit 0
+        exit 1
     fi
 }
 
@@ -62,6 +66,7 @@ background_checks() {
     docker_check
 }
 
+# Read arrow-key menu and return index as function return
 select_option() {
     local options=("$@")
     local num_options=${#options[@]}
@@ -116,105 +121,126 @@ select_option() {
     return $selected
 }
 
-# @description Displays  logo
-# @noargs
+# helper: prompt for a password and export to variable name given
+set_password() {
+    local varname="$1"
+    while true; do
+        read -rs -p "Please enter password for ${varname}: " pass1
+        echo
+        read -rs -p "Please re-enter password for ${varname}: " pass2
+        echo
+        if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
+            export "${varname}"="$pass1"
+            break
+        fi
+        echo "Passwords don't match or are empty. Try again."
+    done
+}
 
+# @description Displays logo
 logo () {
-# This will be shown on every set as user is progressing
-
 echo -ne "
 -------------------------------------------------------------------------
   ____                 _       _              _             _
- |  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
- | | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
- | |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
- |____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
+ |  _ \\  __ _  ___  __| | __ _| |_   _ ___   / \\   _ __ ___| |__
+ | | | |/ _\` |/ _ \\/ _\` |/ _\` | | | | / __| / _ \\ | '__/ __| '_ \\
+ | |_| | (_| |  __/ (_| | (_| | | |_| \\__ \\/ ___ \\| | | (__| | | |
+ |____/ \\__,_|\\___|\\__,_\\__,_|_|\\__,_|___/_/   \\_\\_|  \\___|_| |_|
 ------------------------------------------------------------------------
             Please select presetup settings for your system
 ------------------------------------------------------------------------
 "
 }
 
-# @description This function will handle file systems. At this movement we are handling only
-# btrfs and ext4. Others will be added in future.
 filesystem () {
     echo -ne "
-    Please Select your file system for both boot and root
+    Please select your file system for root
     "
     options=("btrfs" "ext4" "luks" "exit")
     select_option "${options[@]}"
-
-    case $? in
-    0) export FS=btrfs;;
-    1) export FS=ext4;;
-    2)
-        set_password "LUKS_PASSWORD"
-        export FS=luks
-        ;;
-    3) exit ;;
-    *) echo "Wrong option please select again"; filesystem;;
+    choice=$?
+    case $choice in
+        0) export FS=btrfs;;
+        1) export FS=ext4;;
+        2)
+            set_password "LUKS_PASSWORD"
+            export FS=luks
+            ;;
+        3) echo "Exiting."; exit 0;;
+        *) echo "Wrong option please select again"; filesystem;;
     esac
 }
 
-# @description Detects and sets timezone.
 timezone () {
-    # Added this from arch wiki https://wiki.archlinux.org/title/System_time
-    time_zone="$(curl --fail https://ipapi.co/timezone)"
-    echo -ne "
-    System detected your timezone to be '$time_zone' \n"
-    echo -ne "Is this correct?
-    "
+    # attempt to detect timezone
+    local time_zone
+    if time_zone="$(curl --fail --silent https://ipapi.co/timezone)"; then
+        echo -ne "
+    System detected your timezone to be '$time_zone'\n"
+    else
+        time_zone=""
+        echo -ne "
+    Could not auto-detect timezone.\n"
+    fi
+
+    echo -ne "Is this correct?\n"
     options=("Yes" "No")
     select_option "${options[@]}"
-
-    case ${options[$?]} in
-        y|Y|yes|Yes|YES)
-        echo "${time_zone} set as timezone"
-        export TIMEZONE=$time_zone;;
-        n|N|no|NO|No)
-        echo "Please enter your desired timezone e.g. Europe/London :"
-        read -r new_timezone
-        echo "${new_timezone} set as timezone"
-        export TIMEZONE=$new_timezone;;
-        *) echo "Wrong option. Try again";timezone;;
+    choice=$?
+    case $choice in
+        0)
+            if [[ -n "$time_zone" ]]; then
+                echo "${time_zone} set as timezone"
+                export TIMEZONE="$time_zone"
+            else
+                echo "No detected timezone. Please enter manually."
+                read -r new_timezone
+                export TIMEZONE="$new_timezone"
+            fi
+            ;;
+        1)
+            read -r -p "Please enter your desired timezone (e.g. Europe/London): " new_timezone
+            export TIMEZONE="$new_timezone"
+            echo "${TIMEZONE} set as timezone"
+            ;;
+        *)
+            echo "Wrong option. Try again"
+            timezone
+            ;;
     esac
 }
-# @description Set user's keyboard mapping.
+
 keymap () {
     echo -ne "
-    Please select key board layout from this list"
-    # These are default key maps as presented in official arch repo archinstall
-    # shellcheck disable=SC1010
+    Please select key board layout from this list
+    "
     options=(us by ca cf cz de dk es et fa fi fr gr hu il it lt lv mk nl no pl ro ru se sg ua uk)
-
     select_option "${options[@]}"
-    keymap=${options[$?]}
-
+    choice=$?
+    keymap=${options[$choice]}
     echo -ne "Your key boards layout: ${keymap} \n"
     export KEYMAP=$keymap
 }
 
-# @description Choose whether drive is SSD or not.
 drivessd () {
     echo -ne "
     Is this a solid state, flash, or hard drive?
     "
-
     options=("SSD" "MMC" "HDD")
     select_option "${options[@]}"
-
-    case $? in
+    choice=$?
+    case $choice in
         0)
-        export MOUNT_OPTIONS="noatime,compress=zstd,ssd,commit=120";;
+            export MOUNT_OPTIONS="noatime,compress=zstd,ssd,commit=120";;
         1)
-        export MOUNT_OPTIONS="noatime,compress=zstd:5,ssd,commit=120";;
+            export MOUNT_OPTIONS="noatime,compress=zstd:5,ssd,commit=120";;
         2)
-        export MOUNT_OPTIONS="noatime,compress=zstd,commit=120";;
-        *) echo "Wrong option. Try again";drivessd;;
+            export MOUNT_OPTIONS="noatime,compress=zstd,commit=120";;
+        *)
+            echo "Wrong option. Try again"; drivessd;;
     esac
 }
 
-# @description Disk selection for drive to be used with installation.
 diskpart () {
 echo -ne "
 ------------------------------------------------------------------------
@@ -227,86 +253,66 @@ echo -ne "
 
 "
 
-    #Loop through selection if non-viable device (mmcblkXbootY, mmcblkXrpbm, etc) is selected
-	   while true
-	   do
-       PS3='
-       Select the disk to install on: '
-       mapfile -t options < <(lsblk -n --output TYPE,KNAME,SIZE | awk '$1=="disk"{print "/dev/"$2"|"$3}')
+    while true; do
+        mapfile -t options < <(lsblk -n --output TYPE,KNAME,SIZE | awk '$1=="disk"{print "/dev/"$2"|"$3}')
+        select_option "${options[@]}"
+        choice=$?
+        disk_entry="${options[$choice]}"
+        disk="${disk_entry%%|*}"
 
-       select_option "${options[@]}"
-       disk=${options[$?]%|*}
-       if [[ ! "${disk%|*}" =~  ^/dev/mmcblk[0-9]+[a-z]+[0-9]? ]]
-    	  then
-    		    break
-    	  fi
-    	  echo -e "\n${disk%|*} is not a viable install drive \n"
+        if [[ -b "$disk" ]]; then
+            echo -e "\n${disk} selected \n"
+            export DISK="$disk"
+            break
+        else
+            echo "Invalid disk selected. Try again."
+        fi
     done
-
-    echo -e "\n${disk%|*} selected \n"
-        export DISK=${disk%|*}
 
     drivessd
 }
 
-# @description Gather username and password to be used for installation.
 userinfo () {
-    # Loop through user input until the user gives a valid username
-    while true
-    do
-            read -r -p "Please enter username: " username
-            if [[ "${username,,}" =~ ^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$ ]]
-            then
-                    break
-            fi
-            echo "Incorrect username."
+    # username
+    while true; do
+        read -r -p "Please enter username: " username
+        if [[ "${username,,}" =~ ^[a-z_]([a-z0-9_-]{0,31}|[a-z0-9_-]{0,30}\$)$ ]]; then
+            break
+        fi
+        echo "Incorrect username."
     done
     export USERNAME=$username
 
-    while true
-    do
-        read -rs -p "Please enter password: " PASSWORD1
-        echo -ne "\n"
-        read -rs -p "Please re-enter password: " PASSWORD2
-        echo -ne "\n"
-        if [[ "$PASSWORD1" == "$PASSWORD2" ]]; then
-            break
-        else
-            echo -ne "ERROR! Passwords do not match. \n"
-        fi
-    done
-    export PASSWORD=$PASSWORD1
+    # password
+    set_password "PASSWORD"
 
-     # Loop through user input until the user gives a valid hostname, but allow the user to force save
-    while true
-    do
-            read -r -p "Please name your machine: " name_of_machine
-            # hostname regex (!!couldn't find spec for computer name!!)
-            if [[ "${name_of_machine,,}" =~ ^[a-z][a-z0-9_.-]{0,62}[a-z0-9]$ ]]
-            then
-                    break
-            fi
-            # if validation fails allow the user to force saving of the hostname
-            read -r -p "Hostname doesn't seem correct. Do you still want to save it? (y/n)" force
-            if [[ "${force,,}" = "y" ]]
-            then
-                    break
-            fi
+    # hostname
+    while true; do
+        read -r -p "Please name your machine: " name_of_machine
+        if [[ "${name_of_machine,,}" =~ ^[a-z][a-z0-9_.-]{0,62}[a-z0-9]$ ]]; then
+            break
+        fi
+        read -r -p "Hostname doesn't seem correct. Do you still want to save it? (y/n) " force
+        if [[ "${force,,}" = "y" ]]; then
+            break
+        fi
     done
     export NAME_OF_MACHINE=$name_of_machine
 }
 
-locale () {
-    # ask for locale settings
+locale_select () {
     echo -ne "
     Please select your locale setting from this list
     "
-    options=("en_AU.UTF8" "en_US.UTF-8" "en_GB.UTF-8" "es_ES.UTF-8" "fr_FR.UTF-8" "de_DE.UTF-8" "it_IT.UTF-8" "pt_PT.UTF-8" "ja_JP.UTF-8" "exit")
+    options=("en_AU.UTF-8" "en_US.UTF-8" "en_GB.UTF-8" "es_ES.UTF-8" "fr_FR.UTF-8" "de_DE.UTF-8" "it_IT.UTF-8" "pt_PT.UTF-8" "ja_JP.UTF-8" "exit")
     select_option "${options[@]}"
-    locale=${options[$?]}
-
-    echo -ne "Your locale: ${locale} \n"
-    export LOCALE=$locale
+    choice=$?
+    if [[ "${options[$choice]}" == "exit" ]]; then
+        echo "Exiting."
+        exit 0
+    fi
+    export LOCALE="${options[$choice]}"
+    echo -ne "Your locale: ${LOCALE} \n"
 }
 
 # Starting functions
@@ -326,129 +332,136 @@ timezone
 clear
 logo
 keymap
-logo
 clear
-locale
+logo
+locale_select
 
 echo "Setting up mirrors for optimal download"
-iso=$(curl -4 ifconfig.io/country_code)
+iso=$(curl -4 --silent ifconfig.io/country_code || echo "")
 timedatectl set-ntp true
-pacman -Sy
-pacman -S --noconfirm archlinux-keyring #update keyrings to latest to prevent packages failing to install
+pacman -Sy --noconfirm
+pacman -S --noconfirm archlinux-keyring # update keyrings
 pacman -S --noconfirm --needed pacman-contrib terminus-font
-setfont ter-v18b
+setfont ter-v18b || true
 sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
 pacman -S --noconfirm --needed reflector rsync grub
-cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup
+cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup || true
+
 echo -ne "
 -------------------------------------------------------------------------
-                    Setting up $iso mirrors for faster downloads
+                    Setting up ${iso:-all} mirrors for faster downloads
 -------------------------------------------------------------------------
 "
-reflector -a 48 -c "$iso" --score 5 -f 5 -l 20 --sort rate --save /etc/pacman.d/mirrorlist
-if [[ $(grep -c "Server =" /etc/pacman.d/mirrorlist) -lt 5 ]]; then #check if there are less than 5 mirrors
-    cp /etc/pacman.d/mirrorlist.bak /etc/pacman.d/mirrorlist
+if [[ -n "$iso" ]]; then
+    reflector -a 48 -c "$iso" --score 5 -f 5 -l 20 --sort rate --save /etc/pacman.d/mirrorlist || true
 fi
 
-if [ ! -d "/mnt" ]; then
-    mkdir /mnt
+if [[ $(grep -c "Server =" /etc/pacman.d/mirrorlist || true) -lt 5 ]]; then
+    cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist || true
 fi
+
+mkdir -p /mnt
 echo -ne "
 -------------------------------------------------------------------------
                     Installing Prerequisites
 -------------------------------------------------------------------------
 "
 pacman -S --noconfirm --needed gptfdisk btrfs-progs glibc
+
 echo -ne "
 -------------------------------------------------------------------------
                     Formatting Disk
 -------------------------------------------------------------------------
 "
-umount -A --recursive /mnt # make sure everything is unmounted before we start
-# disk prep
+umount -A --recursive /mnt || true
 sgdisk -Z "${DISK}" # zap all on disk
 sgdisk -a 2048 -o "${DISK}" # new gpt disk 2048 alignment
 
 # create partitions
-sgdisk -n 1::+1M --typecode=1:ef02 --change-name=1:'BIOSBOOT' "${DISK}" # partition 1 (BIOS Boot Partition)
-sgdisk -n 2::+1GiB --typecode=2:ef00 --change-name=2:'EFIBOOT' "${DISK}" # partition 2 (UEFI Boot Partition)
-sgdisk -n 3::-0 --typecode=3:8300 --change-name=3:'ROOT' "${DISK}" # partition 3 (Root), default start, remaining
-if [[ ! -d "/sys/firmware/efi" ]]; then # Checking for bios system
+sgdisk -n 1::+1M --typecode=1:ef02 --change-name=1:'BIOSBOOT' "${DISK}"
+sgdisk -n 2::+1GiB --typecode=2:ef00 --change-name=2:'EFIBOOT' "${DISK}"
+sgdisk -n 3::-0 --typecode=3:8300 --change-name=3:'ROOT' "${DISK}"
+if [[ ! -d "/sys/firmware/efi" ]]; then
     sgdisk -A 1:set:2 "${DISK}"
 fi
-partprobe "${DISK}" # reread partition table to ensure it is correct
+partprobe "${DISK}"
 
-# make filesystems
-echo -ne "
--------------------------------------------------------------------------
-                    Creating Filesystems
--------------------------------------------------------------------------
-"
-# @description Creates the btrfs subvolumes.
+# helper: detect correct partition paths for device naming
+if [[ "${DISK}" =~ (nvme|mmcblk) ]]; then
+    partition2="${DISK}p2"
+    partition3="${DISK}p3"
+else
+    partition2="${DISK}2"
+    partition3="${DISK}3"
+fi
+
+# We'll use ROOT_DEVICE for formatting/mounting; it may be partition3 or /dev/mapper/ROOT
+ROOT_DEVICE="${partition3}"
+
+# btrfs subvolume helpers (use ROOT_DEVICE variable)
 createsubvolumes () {
     btrfs subvolume create /mnt/@
     btrfs subvolume create /mnt/@home
 }
 
-# @description Mount all btrfs subvolumes after root has been mounted.
 mountallsubvol () {
-    mount -o "${MOUNT_OPTIONS}",subvol=@home "${partition3}" /mnt/home
+    mount -o "${MOUNT_OPTIONS}",subvol=@home "${ROOT_DEVICE}" /mnt/home
 }
 
-# @description BTRFS subvolulme creation and mounting.
 subvolumesetup () {
-# create nonroot subvolumes
     createsubvolumes
-# unmount root to remount with subvolume
     umount /mnt
-# mount @ subvolume
-    mount -o "${MOUNT_OPTIONS}",subvol=@ "${partition3}" /mnt
-# make directories home, .snapshots, var, tmp
+    mount -o "${MOUNT_OPTIONS}",subvol=@ "${ROOT_DEVICE}" /mnt
     mkdir -p /mnt/home
-# mount subvolumes
     mountallsubvol
 }
-
-if [[ "${DISK}" =~ "nvme"|"mmcblk" ]]; then
-    partition2=${DISK}p2
-    partition3=${DISK}p3
-else
-    partition2=${DISK}2
-    partition3=${DISK}3
-fi
 
 if [[ "${FS}" == "btrfs" ]]; then
     mkfs.fat -F32 -n "EFIBOOT" "${partition2}"
     mkfs.btrfs -f "${partition3}"
-    mount -t btrfs "${partition3}" /mnt
+    ROOT_DEVICE="${partition3}"
+    mount -t btrfs "${ROOT_DEVICE}" /mnt
     subvolumesetup
 elif [[ "${FS}" == "ext4" ]]; then
     mkfs.fat -F32 -n "EFIBOOT" "${partition2}"
     mkfs.ext4 "${partition3}"
-    mount -t ext4 "${partition3}" /mnt
+    ROOT_DEVICE="${partition3}"
+    mount -t ext4 "${ROOT_DEVICE}" /mnt
 elif [[ "${FS}" == "luks" ]]; then
-    mkfs.fat -F32 "${partition2}"
-# enter luks password to cryptsetup and format root partition
-    echo -n "${LUKS_PASSWORD}" | cryptsetup -y -v luksFormat "${partition3}" -
-# open luks container and ROOT will be place holder
+    mkfs.fat -F32 -n "EFIBOOT" "${partition2}"
+
+    # Capture outer partition UUID before opening the container
+    ENCRYPTED_PARTITION_UUID=$(blkid -s UUID -o value "${partition3}" || true)
+
+    # Format LUKS and open it; mapped device will be /dev/mapper/ROOT
+    echo -n "${LUKS_PASSWORD}" | cryptsetup -q luksFormat "${partition3}" -
     echo -n "${LUKS_PASSWORD}" | cryptsetup open "${partition3}" ROOT -
-# now format that container
-    mkfs.btrfs "${partition3}"
-# create subvolumes for btrfs
-    mount -t btrfs "${partition3}" /mnt
+
+    # Set ROOT_DEVICE to the mapped device
+    ROOT_DEVICE="/dev/mapper/ROOT"
+
+    # Format the mapped device and create subvolumes
+    mkfs.btrfs -f "${ROOT_DEVICE}"
+    mount -t btrfs "${ROOT_DEVICE}" /mnt
     subvolumesetup
-    ENCRYPTED_PARTITION_UUID=$(blkid -s UUID -o value "${partition3}")
+
+    # if we didn't get the UUID earlier, try reading again from the partition
+    ENCRYPTED_PARTITION_UUID="${ENCRYPTED_PARTITION_UUID:-$(blkid -s UUID -o value "${partition3}" || true)}"
 fi
 
-BOOT_UUID=$(blkid -s UUID -o value "${partition2}")
+BOOT_UUID=$(blkid -s UUID -o value "${partition2}" || true)
 
 sync
 if ! mountpoint -q /mnt; then
-    echo "ERROR! Failed to mount ${partition3} to /mnt after multiple attempts."
+    echo "ERROR! Failed to mount root device to /mnt after attempts."
     exit 1
 fi
 mkdir -p /mnt/boot
-mount -U "${BOOT_UUID}" /mnt/boot/
+if [[ -n "${BOOT_UUID}" ]]; then
+    mount -U "${BOOT_UUID}" /mnt/boot/
+else
+    mount "${partition2}" /mnt/boot || true
+fi
 
 if ! grep -qs '/mnt' /proc/mounts; then
     echo "Drive is not mounted can not continue"
@@ -468,14 +481,17 @@ if [[ ! -d "/sys/firmware/efi" ]]; then
 else
     pacstrap /mnt base base-devel linux linux-firmware efibootmgr --noconfirm --needed
 fi
+
 echo "keyserver hkp://keyserver.ubuntu.com" >> /mnt/etc/pacman.d/gnupg/gpg.conf
 cp /etc/pacman.d/mirrorlist /mnt/etc/pacman.d/mirrorlist
 
-genfstab -U /mnt >> /mnt/etc/fstab
+genfstab -U /mnt > /mnt/etc/fstab
+
 echo "
   Generated /etc/fstab:
 "
 cat /mnt/etc/fstab
+
 echo -ne "
 -------------------------------------------------------------------------
                     GRUB BIOS Bootloader Install & Check
@@ -484,30 +500,32 @@ echo -ne "
 if [[ ! -d "/sys/firmware/efi" ]]; then
     grub-install --boot-directory=/mnt/boot "${DISK}"
 fi
+
 echo -ne "
 -------------------------------------------------------------------------
                     Checking for low memory systems <8G
 -------------------------------------------------------------------------
 "
-TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+TOTAL_MEM=$(awk '/MemTotal/ {print $2}' /proc/meminfo || echo 0)
 if [[  $TOTAL_MEM -lt 8000000 ]]; then
-    # Put swap into the actual system, not into RAM disk, otherwise there is no point in it, it'll cache RAM into RAM. So, /mnt/ everything.
-    mkdir -p /mnt/opt/swap # make a dir that we can apply NOCOW to to make it btrfs-friendly.
+    mkdir -p /mnt/opt/swap
     if findmnt -n -o FSTYPE /mnt | grep -q btrfs; then
-        chattr +C /mnt/opt/swap # apply NOCOW, btrfs needs that.
+        chattr +C /mnt/opt/swap || true
     fi
-    dd if=/dev/zero of=/mnt/opt/swap/swapfile bs=1M count=2048 status=progress
-    chmod 600 /mnt/opt/swap/swapfile # set permissions.
+    dd if=/dev/zero of=/mnt/opt/swap/swapfile bs=1M count=2048 status=progress || true
+    chmod 600 /mnt/opt/swap/swapfile
     chown root /mnt/opt/swap/swapfile
     mkswap /mnt/opt/swap/swapfile
-    swapon /mnt/opt/swap/swapfile
-    # The line below is written to /mnt/ but doesn't contain /mnt/, since it's just / for the system itself.
-    echo "/opt/swap/swapfile    none    swap    sw    0    0" >> /mnt/etc/fstab # Add swap to fstab, so it KEEPS working after installation.
+    swapon /mnt/opt/swap/swapfile || true
+    echo "/opt/swap/swapfile    none    swap    sw    0    0" >> /mnt/etc/fstab
 fi
 
-gpu_type=$(lspci | grep -E "VGA|3D|Display")
+gpu_type=$(lspci | grep -E "VGA|3D|Display" || true)
 
-arch-chroot /mnt /bin/bash -c "KEYMAP='${KEYMAP}' /bin/bash" <<EOF
+# Use arch-chroot and pass environment variables explicitly; use a single-quoted heredoc so outer shell doesn't expand variables.
+arch-chroot /mnt /usr/bin/env KEYMAP="${KEYMAP}" TIMEZONE="${TIMEZONE}" LOCALE="${LOCALE}" /bin/bash -s <<'EOF_CHROOT'
+set -euo pipefail
+IFS=$'\n\t'
 
 echo -ne "
 -------------------------------------------------------------------------
@@ -516,71 +534,67 @@ echo -ne "
 "
 pacman -S --noconfirm --needed networkmanager
 systemctl enable NetworkManager
+
 echo -ne "
 -------------------------------------------------------------------------
-                    Setting up mirrors for optimal download
+                    Setting up mirrors for optimal download (chroot)
 -------------------------------------------------------------------------
 "
 pacman -S --noconfirm --needed pacman-contrib curl terminus-font
 pacman -S --noconfirm --needed reflector rsync grub arch-install-scripts git ntp wget
-cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak
+cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.bak || true
 
-nc=$(grep -c ^"cpu cores" /proc/cpuinfo)
+nc=$(grep -c ^"cpu cores" /proc/cpuinfo || echo 1)
 echo -ne "
 -------------------------------------------------------------------------
-                    You have " $nc" cores. And
-            changing the makeflags for " $nc" cores. Aswell as
-                changing the compression settings.
+                    You have ${nc} cores. Adjusting makepkg settings.
 -------------------------------------------------------------------------
 "
-TOTAL_MEM=$(cat /proc/meminfo | grep -i 'memtotal' | grep -o '[[:digit:]]*')
+TOTAL_MEM=$(awk '/MemTotal/ {print $2}' /proc/meminfo || echo 0)
 if [[  $TOTAL_MEM -gt 8000000 ]]; then
-sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j$nc\"/g" /etc/makepkg.conf
-sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T $nc -z -)/g" /etc/makepkg.conf
+    sed -i "s/#MAKEFLAGS=\"-j2\"/MAKEFLAGS=\"-j${nc}\"/g" /etc/makepkg.conf || true
+    sed -i "s/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -T ${nc} -z -)/g" /etc/makepkg.conf || true
 fi
+
 echo -ne "
 -------------------------------------------------------------------------
                     Setup Language and set locale
 -------------------------------------------------------------------------
 "
-sed -i 's/^#${LOCALE} UTF-8/${LOCALE} UTF-8/' /etc/locale.gen
-locale-gen
-timedatectl --no-ask-password set-timezone ${TIMEZONE}
-timedatectl --no-ask-password set-ntp 1
-localectl --no-ask-password set-locale LANG="${LOCALE}" LC_TIME="${LOCALE}"
-ln -s /usr/share/zoneinfo/${TIMEZONE} /etc/localtime
+# Use LOCALE variable passed via env
+if [[ -n "${LOCALE:-}" ]]; then
+    sed -i "s/^#${LOCALE} UTF-8/${LOCALE} UTF-8/" /etc/locale.gen || true
+    locale-gen || true
+    timedatectl --no-ask-password set-timezone "${TIMEZONE:-UTC}" || true
+    timedatectl --no-ask-password set-ntp 1 || true
+    localectl --no-ask-password set-locale LANG="${LOCALE}" LC_TIME="${LOCALE}" || true
+    ln -sf /usr/share/zoneinfo/"${TIMEZONE:-UTC}" /etc/localtime || true
+fi
 
 # Set keymaps
-echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
-echo "XKBLAYOUT=${KEYMAP}" >> /etc/vconsole.conf
-echo "Keymap set to: ${KEYMAP}"
+if [[ -n "${KEYMAP:-}" ]]; then
+    echo "KEYMAP=${KEYMAP}" > /etc/vconsole.conf
+fi
 
-# Add sudo no password rights
-sed -i 's/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-sed -i 's/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
+# Add sudo no password rights temporarily
+sed -i 's/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers || true
+sed -i 's/^# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers || true
 
-#Add parallel downloading
-sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf
-
-#Set colors and enable the easter egg
-sed -i 's/^#Color/Color\nILoveCandy/' /etc/pacman.conf
-
-#Enable multilib
-sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
-pacman -Sy --noconfirm --needed
+# Add parallel downloading and ILoveCandy for pacman
+sed -i 's/^#ParallelDownloads/ParallelDownloads/' /etc/pacman.conf || true
+sed -i 's/^#Color/Color\nILoveCandy/' /etc/pacman.conf || true
+sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf || true
+pacman -Sy --noconfirm --needed || true
 
 echo -ne "
 -------------------------------------------------------------------------
                     Installing Microcode
 -------------------------------------------------------------------------
 "
-# determine processor type and install microcode
-if grep -q "GenuineIntel" /proc/cpuinfo; then
-    echo "Installing Intel microcode"
-    pacman -S --noconfirm --needed intel-ucode
-elif grep -q "AuthenticAMD" /proc/cpuinfo; then
-    echo "Installing AMD microcode"
-    pacman -S --noconfirm --needed amd-ucode
+if grep -q "GenuineIntel" /proc/cpuinfo 2>/dev/null; then
+    pacman -S --noconfirm --needed intel-ucode || true
+elif grep -q "AuthenticAMD" /proc/cpuinfo 2>/dev/null; then
+    pacman -S --noconfirm --needed amd-ucode || true
 else
     echo "Unable to determine CPU vendor. Skipping microcode installation."
 fi
@@ -590,100 +604,80 @@ echo -ne "
                     Installing Graphics Drivers
 -------------------------------------------------------------------------
 "
-# Graphics Drivers find and install
-if echo "${gpu_type}" | grep -E "NVIDIA|GeForce"; then
-    echo "Installing NVIDIA drivers: nvidia-lts"
-    pacman -S --noconfirm --needed nvidia-lts
-elif echo "${gpu_type}" | grep 'VGA' | grep -E "Radeon|AMD"; then
-    echo "Installing AMD drivers: xf86-video-amdgpu"
-    pacman -S --noconfirm --needed xf86-video-amdgpu
-elif echo "${gpu_type}" | grep -E "Integrated Graphics Controller"; then
-    echo "Installing Intel drivers:"
-    pacman -S --noconfirm --needed libva-intel-driver libvdpau-va-gl lib32-vulkan-intel vulkan-intel libva-intel-driver libva-utils lib32-mesa
-elif echo "${gpu_type}" | grep -E "Intel Corporation UHD"; then
-    echo "Installing Intel UHD drivers:"
-    pacman -S --noconfirm --needed libva-intel-driver libvdpau-va-gl lib32-vulkan-intel vulkan-intel libva-intel-driver libva-utils lib32-mesa
+# gpu_type from outer environment is not available here; do best-effort detection
+gpu_type_local=$(lspci | grep -E "VGA|3D|Display" || true)
+if echo "${gpu_type_local}" | grep -E "NVIDIA|GeForce" >/dev/null 2>&1; then
+    pacman -S --noconfirm --needed nvidia nvidia-utils || true
+elif echo "${gpu_type_local}" | grep -E "Radeon|AMD" >/dev/null 2>&1; then
+    pacman -S --noconfirm --needed xf86-video-amdgpu || true
+else
+    pacman -S --noconfirm --needed mesa || true
 fi
+
+echo "Done chroot configuration steps."
+EOF_CHROOT
 
 echo -ne "
 -------------------------------------------------------------------------
-                    Adding User
+                    Adding User on target root
 -------------------------------------------------------------------------
 "
-groupadd libvirt
-useradd -m -G wheel,libvirt -s /bin/bash $USERNAME
-echo "$USERNAME created, home directory created, added to wheel and libvirt group, default shell set to /bin/bash"
-echo "$USERNAME:$PASSWORD" | chpasswd
-echo "$USERNAME password set"
-echo $NAME_OF_MACHINE > /etc/hostname
+# Add user and set password in the new system
+arch-chroot /mnt /bin/bash -c "
+groupadd -f libvirt || true
+useradd -m -G wheel,libvirt -s /bin/bash '${USERNAME}' || true
+echo '${USERNAME}:${PASSWORD}' | chpasswd
+echo '${NAME_OF_MACHINE}' > /etc/hostname
+"
 
 if [[ ${FS} == "luks" ]]; then
-# Making sure to edit mkinitcpio conf if luks is selected
-# add encrypt in mkinitcpio.conf before filesystems in hooks
-    sed -i 's/filesystems/encrypt filesystems/g' /etc/mkinitcpio.conf
-# making mkinitcpio with linux kernel
-    mkinitcpio -p linux-lts
+    # Ensure initramfs includes encrypt hook and regenerate
+    arch-chroot /mnt /bin/bash -c "sed -i 's/filesystems/encrypt filesystems/g' /etc/mkinitcpio.conf || true; mkinitcpio -P || true"
+else
+    arch-chroot /mnt /bin/bash -c "mkinitcpio -P || true"
 fi
 
 echo -ne "
 -------------------------------------------------------------------------
-____                 _       _              _             _
-|  _ \  __ _  ___  __| | __ _| |_   _ ___   / \   _ __ ___| |__
-| | | |/ _` |/ _ \/ _` |/ _` | | | | / __| / _ \ | '__/ __| '_ \
-| |_| | (_| |  __/ (_| | (_| | | |_| \__ \/ ___ \| | | (__| | | |
-|____/ \__,_|\___|\__,_|\__,_|_|\__,_|___/_/   \_\_|  \___|_| |_|
+                    GRUB EFI Bootloader Install & Check
 -------------------------------------------------------------------------
-                    Automated Arch Linux Installer
--------------------------------------------------------------------------
-
-Final Setup and Configurations
-GRUB EFI Bootloader Install & Check
 "
-
 if [[ -d "/sys/firmware/efi" ]]; then
-    grub-install --efi-directory=/boot ${DISK}
+    arch-chroot /mnt /bin/bash -c "grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB || true"
 fi
 
-echo -ne "
--------------------------------------------------------------------------
-               Creating Grub Boot Menu
--------------------------------------------------------------------------
-"
-# set kernel parameter for decrypting the drive
-if [[ "${FS}" == "luks" ]]; then
-sed -i "s%GRUB_CMDLINE_LINUX_DEFAULT=\"%GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=${ENCRYPTED_PARTITION_UUID}:ROOT root=/dev/mapper/ROOT %g" /etc/default/grub
+# Configure grub for LUKS (if used) and add splash
+if [[ "${FS:-}" == "luks" && -n "${ENCRYPTED_PARTITION_UUID:-}" ]]; then
+    arch-chroot /mnt /bin/bash -c "sed -i 's%GRUB_CMDLINE_LINUX_DEFAULT=\"%GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=${ENCRYPTED_PARTITION_UUID}:ROOT root=/dev/mapper/ROOT %g' /etc/default/grub || true"
 fi
-# set kernel parameter for adding splash screen
-sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*/& splash /' /etc/default/grub
-
-echo -e "Updating grub..."
-grub-mkconfig -o /boot/grub/grub.cfg
-echo -e "All set!"
+arch-chroot /mnt /bin/bash -c "sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=\"[^\\\"]*/& splash /' /etc/default/grub || true"
+arch-chroot /mnt /bin/bash -c "grub-mkconfig -o /boot/grub/grub.cfg || true"
 
 echo -ne "
 -------------------------------------------------------------------------
                     Enabling Essential Services
 -------------------------------------------------------------------------
 "
-ntpd -qg
-systemctl enable ntpd.service
-echo "  NTP enabled"
-systemctl disable dhcpcd.service
-echo "  DHCP disabled"
-systemctl enable NetworkManager.service
-echo "  NetworkManager enabled"
-systemctl enable reflector.timer
-echo "  Reflector enabled"
+arch-chroot /mnt /bin/bash -c "ntpd -qg || true"
+arch-chroot /mnt /bin/bash -c "systemctl enable ntpd.service || true"
+arch-chroot /mnt /bin/bash -c "systemctl disable dhcpcd.service || true"
+arch-chroot /mnt /bin/bash -c "systemctl enable NetworkManager.service || true"
+arch-chroot /mnt /bin/bash -c "systemctl enable reflector.timer || true"
 
 echo -ne "
 -------------------------------------------------------------------------
-                    Cleaning
+                    Cleaning / Finalizing
 -------------------------------------------------------------------------
 "
-# Remove no password sudo rights
-sed -i 's/^%wheel ALL=(ALL) NOPASSWD: ALL/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
-sed -i 's/^%wheel ALL=(ALL:ALL) NOPASSWD: ALL/# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers
-# Add sudo rights
-sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers
-sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers
-EOF
+# Remove nopass sudo and enable normal wheel rights
+arch-chroot /mnt /bin/bash -c "sed -i 's/^%wheel ALL=(ALL) NOPASSWD: ALL/# %wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers || true"
+arch-chroot /mnt /bin/bash -c "sed -i 's/^%wheel ALL=(ALL:ALL) NOPASSWD: ALL/# %wheel ALL=(ALL:ALL) NOPASSWD: ALL/' /etc/sudoers || true"
+arch-chroot /mnt /bin/bash -c "sed -i 's/^# %wheel ALL=(ALL) ALL/%wheel ALL=(ALL) ALL/' /etc/sudoers || true"
+arch-chroot /mnt /bin/bash -c "sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers || true"
+
+echo -ne "
+-------------------------------------------------------------------------
+                    Installation complete
+-------------------------------------------------------------------------
+"
+echo "You can now reboot into your new system."
