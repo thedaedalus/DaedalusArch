@@ -1,10 +1,4 @@
 # This installs my dotfiles using dotbot
-- clean:
-    ~/:
-      force: true
-    ~/.config:
-      recursive: true
-
 - defaults:
     link:
       create: true
