@@ -13,7 +13,24 @@ This is my setup of Arch without needing to install the full CachyOS distro but 
 - [Dotbot](https://github.com/anishathalye/dotbot)
 - [Ventoy](https://www.ventoy.net/en/index.html)
 
-## Download & Install base Arch
+## Automated Install Script
+
+### Download & Install base Arch
+
+1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
+2. Either add it to a [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
+3. After computer has booted with Arch live ISO run ```archinstall```
+4. Choose server install, choose ssh and netmanger. Set a root password and create a user.
+5. After install is finished reboot into your new Arch install. Login as the user you created.
+
+### Run the install script
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/install.sh | bash
+```
+
+## Manual Install Steps
+### Download & Install base Arch
 
 1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
 2. Either add it to a [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
@@ -25,7 +42,7 @@ This is my setup of Arch without needing to install the full CachyOS distro but 
 su - <user> #make sure you change this to your username
 ```
 
-## Install CachyOS Repos
+### Install CachyOS Repos
 
 1. Download the script and run it
 
@@ -70,7 +87,7 @@ ip a
 ssh <user>@<ip-address>
 ```
 
-## Install Chaotic Aur
+### Install Chaotic Aur
 
 1. Install the repo
 
@@ -187,10 +204,10 @@ ln -sf ~/.cache/wal/dank-pywalfox.json ~/.cache/wal/colors.json
 paru -S cachyos-gaming-applications
 ```
 
-## Final Reboot
+### Final Reboot
 
 ```bash
 sudo reboot now
 ```
 
-## Enjoy your new Arch install
+### Enjoy your new Arch install
