@@ -472,9 +472,122 @@ install_danklinux() {
 }
 
 install_greeter() {
-    paru -S --noconfirm --needed --skipreview --sudoloop greetd-dms-greeter-git
-    sudo systemctl enable greetd
-    sudo usermod -aG greeter $USER
+    # Robust, idempotent greeter install + greetd configuration
+    print_message "Installing dms greeter (idempotent)..."
+
+    # Detect or install greeter binary
+    GREETER_BIN=""
+    # Prefer explicitly-named greeter, then dms wrapper, then /usr/local path
+    if command -v dms-greeter >/dev/null 2>&1; then
+        GREETER_BIN="$(command -v dms-greeter)"
+    elif command -v dms >/dev/null 2>&1; then
+        GREETER_BIN="$(command -v dms)"
+    elif [ -x /usr/local/bin/dms-greeter ]; then
+        GREETER_BIN="/usr/local/bin/dms-greeter"
+    fi
+
+    # Try installing the AUR package if binary not found
+    if [ -z "$GREETER_BIN" ]; then
+        echo "dms greeter binary not found; attempting to install greetd-dms-greeter-git..."
+        if command -v paru >/dev/null 2>&1; then
+            paru -S --noconfirm --needed --skipreview --sudoloop greetd-dms-greeter-git || true
+        else
+            sudo pacman -S --noconfirm --needed greetd-dms-greeter-git || true
+        fi
+
+        # Re-detect after attempted install
+        if command -v dms-greeter >/dev/null 2>&1; then
+            GREETER_BIN="$(command -v dms-greeter)"
+        elif command -v dms >/dev/null 2>&1; then
+            GREETER_BIN="$(command -v dms)"
+        elif [ -x /usr/local/bin/dms-greeter ]; then
+            GREETER_BIN="/usr/local/bin/dms-greeter"
+        fi
+    fi
+
+    # If still not found, warn and use a sensible default path
+    if [ -z "$GREETER_BIN" ]; then
+        echo "Warning: dms greeter binary not found after install attempt. Using /usr/local/bin/dms-greeter as expected location." >&2
+        GREETER_BIN="/usr/local/bin/dms-greeter"
+    fi
+
+    # Ensure greeter group and system user exist
+    if ! getent group greeter >/dev/null 2>&1; then
+        sudo groupadd --system greeter || true
+    fi
+    if ! id -u greeter >/dev/null 2>&1; then
+        sudo useradd --system --create-home --gid greeter --shell /usr/sbin/nologin greeter || true
+    fi
+
+    # Ensure greetd package is installed (core package)
+    if ! pacman -Qi greetd >/dev/null 2>&1; then
+        sudo pacman -S --noconfirm --needed greetd || true
+    fi
+
+    # Prepare greetd configuration using detected greeter command
+    GREETER_CMD="${GREETER_BIN} --command niri"
+    GREETD_DIR="/etc/greetd"
+    GREETD_CONF="${GREETD_DIR}/config.toml"
+    tmp_conf="$(mktemp)"
+
+    mkdir -p "$GREETD_DIR"
+
+    # Build desired config dynamically (use TOML literal style)
+    cat > "$tmp_conf" <<EOF
+[terminal]
+vt = 1
+
+[default_session]
+user = "greeter"
+command = "${GREETER_CMD}"
+EOF
+
+    # If config file differs (or does not exist), install it (backup first)
+    if [ ! -f "$GREETD_CONF" ] || ! cmp -s "$tmp_conf" "$GREETD_CONF"; then
+        sudo cp -n "$GREETD_CONF" "${GREETD_CONF}.bak" 2>/dev/null || true
+        sudo mv "$tmp_conf" "$GREETD_CONF"
+        sudo chown root:root "$GREETD_CONF" 2>/dev/null || true
+        sudo chmod 0644 "$GREETD_CONF" 2>/dev/null || true
+        print_message "Wrote $GREETD_CONF (greeter command: ${GREETER_CMD})"
+    else
+        rm -f "$tmp_conf"
+        print_message "$GREETD_CONF already up to date (greeter command: ${GREETER_CMD})"
+    fi
+
+    # Enable and start greetd if systemd is running and unit exists
+    if [ -d /run/systemd/system ]; then
+        if sudo systemctl list-unit-files --type=service 2>/dev/null | grep -q '^greetd\.service'; then
+            if sudo systemctl is-enabled --quiet greetd 2>/dev/null; then
+                print_message "greetd already enabled"
+            else
+                if sudo systemctl enable --now greetd 2>/dev/null; then
+                    print_message "greetd enabled and started"
+                else
+                    echo "Warning: failed to enable/start greetd; you may need to enable it after boot." >&2
+                fi
+            fi
+        else
+            echo "greetd unit not present; skipping enable/start" >&2
+        fi
+    else
+        echo "Systemd not detected (chroot or non-systemd); skipping enable/start of greetd." >&2
+    fi
+
+    # Add the installing user to greeter group if possible
+    target_user="${SUDO_USER:-$USER}"
+    if id -u "$target_user" >/dev/null 2>&1; then
+        if getent group greeter >/dev/null 2>&1; then
+            if id -nG "$target_user" | grep -qw greeter; then
+                print_message "User $target_user already in greeter group"
+            else
+                sudo usermod -aG greeter "$target_user" && print_message "Added $target_user to greeter group"
+            fi
+        else
+            echo "greeter group not present; skipping adding user to greeter group" >&2
+        fi
+    fi
+
+    return 0
 }
 
 check_virtual_system() {
