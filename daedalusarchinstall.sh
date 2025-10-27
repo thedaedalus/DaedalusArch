@@ -116,19 +116,19 @@ install_repos() {
     require_cmd curl
     require_cmd tar
     require_cmd find
-    
+
     repo_url="https://mirror.cachyos.org/cachyos-repo.tar.xz"
     echo "Downloading ${repo_url}..."
     if ! curl -fLO "$repo_url"; then
         echo "Failed to download CachyOS repo archive from $repo_url"
         return 1
     fi
-    
+
     if ! tar -xf cachyos-repo.tar.xz; then
         echo "Failed to extract cachyos-repo.tar.xz"
         return 1
     fi
-    
+
     sudo pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
     sudo pacman-key --lsign-key F3B607488DB35A47
 
@@ -168,7 +168,7 @@ install_repos() {
         echo "chaotic-aur already configured in /etc/pacman.conf"
     fi
 
-   
+
 }
 
 install_packages() {
@@ -338,7 +338,7 @@ setup_pacman() {
 
     # Enable multilib section (uncomment bracket and include line)
     if ! grep -q "^\[multilib\]" "$conf"; then
-        sed -i "/\[multilib\]/,/Include/"'s/^#//' "$conf"
+        sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' "$conf"
     fi
 }
 
@@ -353,13 +353,13 @@ install_danklinux() {
     RED='\033[0;31m'
     GREEN='\033[0;32m'
     NC='\033[0m' # No Color
-    
+
     # Check if running on Linux
     if [ "$(uname)" != "Linux" ]; then
         printf "%bError: This installer only supports Linux systems%b\n" "$RED" "$NC"
         exit 1
     fi
-    
+
     # Detect architecture
     ARCH=$(uname -m)
     case "$ARCH" in
@@ -375,33 +375,33 @@ install_danklinux() {
             exit 1
             ;;
     esac
-    
+
     # Get the latest release version
     LATEST_VERSION=$(curl -s https://api.github.com/repos/AvengeMedia/danklinux/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    
+
     if [ -z "$LATEST_VERSION" ]; then
         printf "%bError: Could not fetch latest version%b\n" "$RED" "$NC"
         exit 1
     fi
-    
+
     printf "%bInstalling Dankinstall %s for %s...%b\n" "$GREEN" "$LATEST_VERSION" "$ARCH" "$NC"
-    
+
     # Download and install
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR" || exit 1
-    
+
     # Download the gzipped binary and its checksum
     printf "%bDownloading installer...%b\n" "$GREEN" "$NC"
     curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz" -o "installer.gz"
     curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz.sha256" -o "expected.sha256"
-    
+
     # Get the expected checksum
     EXPECTED_CHECKSUM=$(cat expected.sha256 | awk '{print $1}')
-    
+
     # Calculate actual checksum
     printf "%bVerifying checksum...%b\n" "$GREEN" "$NC"
     ACTUAL_CHECKSUM=$(sha256sum installer.gz | awk '{print $1}')
-    
+
     # Compare checksums
     if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
         printf "%bError: Checksum verification failed%b\n" "$RED" "$NC"
@@ -412,19 +412,19 @@ install_danklinux() {
         rm -rf "$TEMP_DIR"
         exit 1
     fi
-    
+
     # Decompress the binary
     printf "%bDecompressing installer...%b\n" "$GREEN" "$NC"
     gunzip installer.gz
     chmod +x installer
-    
+
     # Execute the installer
     printf "%bRunning installer...%b\n" "$GREEN" "$NC"
     ./installer
-    
+
     # Cleanup
     cd - > /dev/null
-    rm -rf "$TEMP_DIR"     
+    rm -rf "$TEMP_DIR"
     return 0
 }
 
