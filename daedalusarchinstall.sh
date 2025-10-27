@@ -487,7 +487,6 @@ check_virtual_system() {
 install_qemu_guest_tools() {
     print_message "Installing QEMU Guest Tools..."
     sudo pacman -S --noconfirm --needed qemu-guest-agent spice-vdagent vulkan-virtio lib32-vulkan-virtio
-    sudo systemctl enable qemu-guest-agent.service
 }
 
 install_virtualbox_guest_additions() {
