@@ -13,6 +13,7 @@
 #Automate install of packages and dotfiles on a new Arch Linux system
 set -euo pipefail
 IFS=$'\n\t'
+LOGFILE="$HOME/daedalusarch-post-install.log"
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run with root privileges (sudo). You will be prompted for sudo when needed."
 fi
@@ -33,8 +34,22 @@ logo() {
                                                 Post install script for Arch Linux
           ==========================================================================================================
     "
+
+}
+is_sourced() {
+    # If ${BASH_SOURCE[0]} != $0 then script is being sourced
+    [ "${BASH_SOURCE[0]}" != "$0" ]
 }
 
+handle_fatal() {
+    local msg="$1"
+    echo "$msg" | tee -a "$LOGFILE" >&2
+    if is_sourced; then
+        return 1
+    else
+        exit 1
+    fi
+}
 _tmpfiles=()
 cleanup() {
     #  Cleanup function for temporary files and helpful trap on exit
@@ -505,30 +520,38 @@ logo
 setup_pacman
 install_repos
 update_system
-vm_type="$(check_virtual_system 2>/dev/null || true)"    # returns "", "kvm", "virtualbox", "vmware", etc.
+
+
+vm_type="$(check_virtual_system 2>/dev/null || true)"
+
 if [ -n "$vm_type" ]; then
     print_message "Running in VM: $vm_type"
+
     case "$vm_type" in
         kvm|qemu)
-            if ! install_qemu_guest_tools 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
-                echo "Error: install_qemu_guest_tools failed; see /var/log/daedalus-guest-tools.log" >&2
-                return 1
+            # Run installer and pipe output to tee; capture installer's exit status
+            install_qemu_guest_tools 2>&1 | tee -a "$LOGFILE"
+            rc=${PIPESTATUS[0]:-1}
+            if [ $rc -ne 0 ]; then
+                handle_fatal "Error: install_qemu_guest_tools failed (exit $rc). See $LOGFILE"
             fi
             ;;
         virtualbox)
-            if ! install_virtualbox_guest_additions 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
-                echo "Error: install_virtualbox_guest_additions failed; see /var/log/daedalus-guest-tools.log" >&2
-                return 1
+            install_virtualbox_guest_additions 2>&1 | tee -a "$LOGFILE"
+            rc=${PIPESTATUS[0]:-1}
+            if [ $rc -ne 0 ]; then
+                handle_fatal "Error: install_virtualbox_guest_additions failed (exit $rc). See $LOGFILE"
             fi
             ;;
         vmware)
-            if ! install_vmware_tools 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
-                echo "Error: install_vmware_tools failed; see /var/log/daedalus-guest-tools.log" >&2
-                return 1
+            install_vmware_tools 2>&1 | tee -a "$LOGFILE"
+            rc=${PIPESTATUS[0]:-1}
+            if [ $rc -ne 0 ]; then
+                handle_fatal "Error: install_vmware_tools failed (exit $rc). See $LOGFILE"
             fi
             ;;
         *)
-            echo "Unknown VM type: $vm_type; skipping guest tools" >&2
+            echo "Unknown VM type: $vm_type; skipping guest tools" | tee -a "$LOGFILE"
             ;;
     esac
 else
