@@ -320,9 +320,6 @@ setup_dotfiles() {
     print_message "Setting up dotfiles..."
     REPO_URL="https://github.com/thedaedalus/DaedalusArch.git"
     CLONE_DIR="${HOME}/DaedalusArch"
-    CONFIG_FILE="${CLONE_DIR}/install.conf.yaml"
-    DOTBOT_DIR="${CLONE_DIR}/dotbot"
-    DOTBOT_BIN="${DOTBOT_DIR}/bin/dotbot"
     LOG_DIR="${HOME}/.daedalus"
     LOGFILE="${LOG_DIR}/dotbot.log"
 
@@ -349,45 +346,13 @@ setup_dotfiles() {
             return 1
         fi
     fi
-
-    if [[ ! -f "${CONFIG_FILE}" ]]; then
-        echo "Error: config file not found at ${CONFIG_FILE}" >&2
-        echo "Contents of ${CLONE_DIR}:" | tee -a "${LOGFILE}"
-        ls -la "${CLONE_DIR}" 2>&1 | tee -a "${LOGFILE}" || true
+    cd "${CLONE_DIR}" || { echo "Error: failed to change directory to ${CLONE_DIR}. Aborting dotfiles setup." >&2; return 1; }
+    if ! bash install 2>&1 | tee -a "${LOGFILE}"; then
+        echo "Error: dotfiles installation script failed. See ${LOGFILE} for details." >&2
         return 1
     fi
-
-    pushd "${CLONE_DIR}" >/dev/null || { echo "Error: cannot enter ${CLONE_DIR}" >&2; return 1; }
-    git submodule sync --quiet --recursive 2>&1 | tee -a "${LOGFILE}" || true
-    if ! git submodule update --init --recursive -- "${DOTBOT_DIR}" 2>&1 | tee -a "${LOGFILE}"; then
-        echo "Warning: failed to update dotbot submodule; attempting to continue (see ${LOGFILE})" >&2
-    fi
-
-    if [[ -x "${DOTBOT_BIN}" ]]; then
-        echo "Running dotbot (${DOTBOT_BIN}) with config ${CONFIG_FILE}..." | tee -a "${LOGFILE}"
-        if ! "${DOTBOT_BIN}" -d "${CLONE_DIR}" -c "${CONFIG_FILE}" "${@:-}" 2>&1 | tee -a "${LOGFILE}"; then
-            echo "Error: dotbot run failed. Check ${LOGFILE} for details." >&2
-            popd >/dev/null
-            return 1
-        fi
-    else
-
-        echo "Dotbot binary not found at ${DOTBOT_BIN}; attempting fallback..." | tee -a "${LOGFILE}"
-        if [[ -f "${DOTBOT_DIR}/install.py" ]] && command -v python >/dev/null 2>&1; then
-            if ! python "${DOTBOT_DIR}/install.py" -d "${CLONE_DIR}" -c "${CONFIG_FILE}" 2>&1 | tee -a "${LOGFILE}"; then
-                echo "Error: running dotbot via python failed. Check ${LOGFILE} for details." >&2
-                popd >/dev/null
-                return 1
-            fi
-        else
-            echo "Error: Dotbot not installed and no fallback available. Please check the repository at ${CLONE_DIR}." >&2
-            popd >/dev/null
-            return 1
-        fi
-    fi
-
-    popd >/dev/null
     echo "Dotfiles setup completed successfully." | tee -a "${LOGFILE}"
+    cd ~ >/dev/null
     return 0
 }
 
