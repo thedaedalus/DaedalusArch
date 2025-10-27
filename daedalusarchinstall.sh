@@ -269,10 +269,11 @@ install_extra_packages() {
             cachyos-gaming-applications
             kitty
             ghostty
+            nano
     )
 
     for package in "${EXTRA_PACKAGES[@]}"; do
-            paru -S  --needed "$package"
+            paru -S --noconfirm --needed --skipreview --sudoloop "$package"
     done
 }
 
@@ -301,7 +302,7 @@ setup_dotfiles() {
         git clone "$REPO_URL" "$CLONE_DIR"
     fi
 
-    CONFIG="install.conf.yaml"
+    CONFIG="$CLONE_DIR/install.conf.yaml"
     DOTBOT_DIR="$CLONE_DIR/dotbot"
     DOTBOT_BIN="$DOTBOT_DIR/bin/dotbot"
 
