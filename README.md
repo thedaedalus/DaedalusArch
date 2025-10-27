@@ -20,7 +20,7 @@ This is my setup of Arch without needing to install the full CachyOS distro but 
 1. Download the latest [archiso](https://mirror.aarnet.edu.au/pub/archlinux/iso/)
 2. Either add it to a [ventoy usb](https://www.ventoy.net/en/index.html) or burn it with an image writer e.g [Fedora Image Writer](https://mbriza.fedorapeople.org/liveusb-creator.zip)
 3. After computer has booted with Arch live ISO run ```archinstall```
-4. Choose server install, choose ssh and netmanger. Set a root password and create a user.
+4. Choose server install, choose ssh,netmanger and limine boot loader. Set a root password and create a user.
 5. After install is finished reboot into your new Arch install. Login as the user you created.
 
 ### Run the install script

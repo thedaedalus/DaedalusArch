@@ -33,10 +33,13 @@ else
     YELLOW='\033[0;33m'
     RESET='\033[0m'
 fi
+checksudo() {
+    if [[ $EUID -ne 0 ]]; then
+        printf '%b\n' "${YELLOW}This script must be run with root privileges (sudo). You will be prompted for sudo when needed.${RESET}"
+        sudo true
+    fi
+}
 
-if [[ $EUID -ne 0 ]]; then
-    printf '%b\n' "${YELLOW}This script must be run with root privileges (sudo). You will be prompted for sudo when needed.${RESET}"
-fi
 logo() {
     printf '%b\n' "${CYAN}
           =========================================================================================================
@@ -234,6 +237,7 @@ install_packages() {
         linux-cachyos
         linux-cachyos-headers
         linux-firmware
+        limine-mkinitcpio-hook
         base-devel
         git
         wget
@@ -322,6 +326,7 @@ install_extra_packages() {
             ghostty
             qt6-multimedia
             nano
+            rate-mirrors
     )
 
     for package in "${EXTRA_PACKAGES[@]}"; do
@@ -633,6 +638,7 @@ fi
 }
 
 logo
+checksudo
 setup_pacman
 install_repos
 update_system
@@ -642,11 +648,12 @@ install_danklinux
 install_greeter
 install_extra_packages
 
-read -r -p "Do you want to install gaming applications? (y/n): " GAMING_CHOICE
+msg "Do you want to install gaming applications? (y/n): "
+read -r GAMING_CHOICE
 if [[ "$GAMING_CHOICE" =~ ^[Yy]$ ]]; then
     install_gamining_applications
 else
-    echo "Skipping gaming applications installation."
+    info "Skipping gaming applications installation."
 fi
 
 xdg-user-dirs-update
@@ -654,12 +661,12 @@ install_wallpapers
 setup_dotfiles
 install_pywalfox
 
-print_message "Post-installation script completed successfully!"
-info "Please reboot your system to apply all changes."
-info "Reboot now? (y/n)"
+info "Post-installation script completed successfully!"
+warn "Please reboot your system to apply all changes."
+msg "Reboot now? (y/n)"
 read -r REBOOT_CHOICE
 if [[ "$REBOOT_CHOICE" =~ ^[Yy]$ ]]; then
     sudo reboot
 else
-    info "Reboot skipped. Please remember to reboot later."
+    warn "Reboot skipped. Please remember to reboot later."
 fi
