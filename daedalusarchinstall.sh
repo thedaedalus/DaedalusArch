@@ -35,7 +35,7 @@ else
 fi
 
 if [[ $EUID -ne 0 ]]; then
-    echo "This script must be run with root privileges (sudo). You will be prompted for sudo when needed."
+    printf '%b\n' "${YELLOW}This script must be run with root privileges (sudo). You will be prompted for sudo when needed.${RESET}"
 fi
 logo() {
     printf '%b\n' "${CYAN}
@@ -56,6 +56,23 @@ logo() {
     ${RESET}"
 
 }
+msg() {
+    local msg="$1"
+    printf '%b\n' "${BLUE}$msg${RESET}"
+}
+info() {
+    local msg="$1"
+    printf '%b\n' "${GREEN}$msg${RESET}" | tee -a "$LOGFILE"
+}
+error() {
+    local msg="$1"
+    printf "${RED}$msg${RESET}" | tee -a "$LOGFILE" >&2
+}
+warn() {
+    local msg="$1"
+    printf "${YELLOW}$msg${RESET}" | tee -a "$LOGFILE" >&2
+}
+
 is_sourced() {
     # If ${BASH_SOURCE[0]} != $0 then script is being sourced
     [ "${BASH_SOURCE[0]}" != "$0" ]
@@ -96,7 +113,7 @@ update_system() {
     print_message "Updating system..."
     sudo pacman -Syu --noconfirm
     if [ $? -ne 0 ]; then
-        echo "System update failed. Exiting."
+        error "System update failed. Exiting."
         exit 1
     fi
 }
@@ -133,7 +150,7 @@ add_specific_repo() {
 
     local is_isa_supported="$(eval ${cmd_check})"
     if [ $is_isa_supported -eq 0 ]; then
-        echo "${isa_level} is supported"
+        info "${isa_level} is supported"
 
         sudo cp $pacman_conf $pacman_conf_cachyos
         sudo gawk -i inplace -f $gawk_script $pacman_conf_cachyos || true
@@ -144,7 +161,7 @@ add_specific_repo() {
         echo "CachyOS ${repo_name} Repo changed"
         sudo mv $pacman_conf_cachyos $pacman_conf
     else
-        echo "${isa_level} is not supported"
+        error "${isa_level} is not supported"
     fi
 }
 
@@ -155,14 +172,14 @@ install_repos() {
     require_cmd find
 
     repo_url="https://mirror.cachyos.org/cachyos-repo.tar.xz"
-    echo "Downloading ${repo_url}..."
+    msg "Downloading ${repo_url}..."
     if ! curl -fLO "$repo_url"; then
-        echo "Failed to download CachyOS repo archive from $repo_url"
+        error "Failed to download CachyOS repo archive from $repo_url"
         return 1
     fi
 
     if ! tar -xf cachyos-repo.tar.xz; then
-        echo "Failed to extract cachyos-repo.tar.xz"
+        error "Failed to extract cachyos-repo.tar.xz"
         return 1
     fi
 
@@ -193,7 +210,7 @@ install_repos() {
             add_specific_repo x86-64-v3 ./install-repo.awk cachyos-v3
         fi
     else
-        echo "Repo is already added!"
+        warn "Repo is already added!"
     fi
 
     sudo pacman-key --keyserver hkps://keyserver.ubuntu.com --recv-keys 3056513887B78AEB
@@ -205,7 +222,7 @@ install_repos() {
     if ! grep -q "^\[chaotic-aur\]" /etc/pacman.conf; then
         echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" | sudo tee -a /etc/pacman.conf
     else
-        echo "chaotic-aur already configured in /etc/pacman.conf"
+        warn "chaotic-aur already configured in /etc/pacman.conf"
     fi
 
 
@@ -328,7 +345,7 @@ install_wallpapers() {
     mkdir -p "$target_dir"
     pushd "$target_dir" >/dev/null
     if [[ -d "walls-catppuccin-mocha" ]]; then
-        echo "Wallpaper repo already present, pulling latest..."
+        info "Wallpaper repo already present, pulling latest..."
         git -C walls-catppuccin-mocha pull --rebase
     else
         git clone https://github.com/orangci/walls-catppuccin-mocha.git
@@ -355,23 +372,23 @@ setup_dotfiles() {
     mv ~/.config/tealdeer/config.toml ~/.config/tealdeer/config.toml_backup_$(date +%s)
 
     if [[ -d "${CLONE_DIR}" ]]; then
-        echo "Directory ${CLONE_DIR} already exists, updating..."
+        warn "Directory ${CLONE_DIR} already exists, updating..."
         if ! git -C "${CLONE_DIR}" pull --rebase --quiet 2>&1 | tee -a "${LOGFILE}"; then
-            echo "Warning: failed to update ${CLONE_DIR}; continuing with existing checkout (see ${LOGFILE})" >&2
+            error "Warning: failed to update ${CLONE_DIR}; continuing with existing checkout (see ${LOGFILE})" >&2
         fi
     else
         echo "Cloning ${REPO_URL} into ${CLONE_DIR}..."
         if ! git clone --quiet "${REPO_URL}" "${CLONE_DIR}" 2>&1 | tee -a "${LOGFILE}"; then
-            echo "Error: failed to clone ${REPO_URL} into ${CLONE_DIR}. Aborting dotfiles setup." >&2
+            error "Error: failed to clone ${REPO_URL} into ${CLONE_DIR}. Aborting dotfiles setup." >&2
             return 1
         fi
     fi
     cd "${CLONE_DIR}" || { echo "Error: failed to change directory to ${CLONE_DIR}. Aborting dotfiles setup." >&2; return 1; }
     if ! bash install 2>&1 | tee -a "${LOGFILE}"; then
-        echo "Error: dotfiles installation script failed. See ${LOGFILE} for details." >&2
+        error "Error: dotfiles installation script failed. See ${LOGFILE} for details." >&2
         return 1
     fi
-    echo "Dotfiles setup completed successfully." | tee -a "${LOGFILE}"
+    info "Dotfiles setup completed successfully." | tee -a "${LOGFILE}"
     cd ~ >/dev/null
     return 0
 }
@@ -412,14 +429,9 @@ install_danklinux() {
     require_cmd sha256sum
     require_cmd gunzip
 
-    # Colors for output
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    NC='\033[0m' # No Color
-
     # Check if running on Linux
     if [ "$(uname)" != "Linux" ]; then
-        printf "%bError: This installer only supports Linux systems%b\n" "$RED" "$NC"
+        error "Error: This installer only supports Linux systems"
         exit 1
     fi
 
@@ -433,8 +445,8 @@ install_danklinux() {
             ARCH="arm64"
             ;;
         *)
-            printf "%bError: Unsupported architecture: %s%b\n" "$RED" "$ARCH" "$NC"
-            printf "This installer only supports x86_64 (amd64) and aarch64 (arm64) architectures\n"
+            error "Error: Unsupported architecture: $ARCH"
+            msg "This installer only supports x86_64 (amd64) and aarch64 (arm64) architectures"
             exit 1
             ;;
     esac
@@ -443,18 +455,18 @@ install_danklinux() {
     LATEST_VERSION=$(curl -s https://api.github.com/repos/AvengeMedia/danklinux/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
     if [ -z "$LATEST_VERSION" ]; then
-        printf "%bError: Could not fetch latest version%b\n" "$RED" "$NC"
+        error "Error: Could not fetch latest version"
         exit 1
     fi
 
-    printf "%bInstalling Dankinstall %s for %s...%b\n" "$GREEN" "$LATEST_VERSION" "$ARCH" "$NC"
+    info "Installing Dankinstall $LATEST_VERSION for $ARCH..."
 
     # Download and install
     TEMP_DIR=$(mktemp -d)
     cd "$TEMP_DIR" || exit 1
 
     # Download the gzipped binary and its checksum
-    printf "%bDownloading installer...%b\n" "$GREEN" "$NC"
+    info "Downloading installer..."
     curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz" -o "installer.gz"
     curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz.sha256" -o "expected.sha256"
 
@@ -462,27 +474,27 @@ install_danklinux() {
     EXPECTED_CHECKSUM=$(cat expected.sha256 | awk '{print $1}')
 
     # Calculate actual checksum
-    printf "%bVerifying checksum...%b\n" "$GREEN" "$NC"
+    info "Verifying checksum..."
     ACTUAL_CHECKSUM=$(sha256sum installer.gz | awk '{print $1}')
 
     # Compare checksums
     if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
-        printf "%bError: Checksum verification failed%b\n" "$RED" "$NC"
-        printf "Expected: %s\n" "$EXPECTED_CHECKSUM"
-        printf "Got:      %s\n" "$ACTUAL_CHECKSUM"
-        printf "The downloaded file may be corrupted or tampered with\n"
+        error "Error: Checksum verification failed%b\n" "$RED" "$NC"
+        msg "Expected: $EXPECTED_CHECKSUM"
+        msg "Got:      $ACTUAL_CHECKSUM"
+        msg "The downloaded file may be corrupted or tampered with"
         cd - > /dev/null
         rm -rf "$TEMP_DIR"
         exit 1
     fi
 
     # Decompress the binary
-    printf "%bDecompressing installer...%b\n" "$GREEN" "$NC"
+    info "Decompressing installer..."
     gunzip installer.gz
     chmod +x installer
 
     # Execute the installer
-    printf "%bRunning installer...%b\n" "$GREEN" "$NC"
+    info "Running installer..."
     ./installer
 
     # Cleanup
@@ -513,10 +525,10 @@ if [ ! -f "$GREETD_CONF" ] || ! cmp -s "$tmp_conf" "$GREETD_CONF"; then
     sudo mv "$tmp_conf" "$GREETD_CONF"
     sudo chown root:root "$GREETD_CONF" 2>/dev/null || true
     sudo chmod 0644 "$GREETD_CONF" 2>/dev/null || true
-    echo "Wrote $GREETD_CONF (greeter command: ${GREETER_CMD})"
+    info "Wrote $GREETD_CONF (greeter command: ${GREETER_CMD})"
 else
     rm -f "$tmp_conf"
-    echo "$GREETD_CONF is already configured correctly; no changes made."
+    warn "$GREETD_CONF is already configured correctly; no changes made."
 fi
 }
 
@@ -559,17 +571,17 @@ check_virtual_system() {
 }
 
 install_qemu_guest_tools() {
-    echo  "Installing QEMU Guest Tools..."
+    msg  "Installing QEMU Guest Tools..."
     sudo pacman -S --noconfirm --needed qemu-guest-agent spice-vdagent vulkan-virtio lib32-vulkan-virtio
 }
 
 install_virtualbox_guest_additions() {
-    echo "Installing VirtualBox Guest Additions..."
+    msg "Installing VirtualBox Guest Additions..."
     sudo pacman -S --noconfirm --needed virtualbox-guest-utils virtualbox-guest-dkms linux-headers
     sudo systemctl enable vboxservice.service
 }
 install_vmware_tools() {
-    echo "Installing VMware Tools..."
+    msg "Installing VMware Tools..."
     sudo pacman -S --noconfirm --needed open-vm-tools
     sudo systemctl enable vmtoolsd.service
     sudo systemctl enable vmware-vmblock-fuse.service
@@ -641,11 +653,11 @@ setup_dotfiles
 install_pywalfox
 
 print_message "Post-installation script completed successfully!"
-echo "Please reboot your system to apply all changes."
-echo "Reboot now? (y/n)"
+info "Please reboot your system to apply all changes."
+info "Reboot now? (y/n)"
 read -r REBOOT_CHOICE
 if [[ "$REBOOT_CHOICE" =~ ^[Yy]$ ]]; then
     sudo reboot
 else
-    echo "Reboot skipped. Please remember to reboot later."
+    info "Reboot skipped. Please remember to reboot later."
 fi
