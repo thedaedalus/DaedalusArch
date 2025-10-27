@@ -49,9 +49,11 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || { echo "Required command '$1' not found. Please install it and re-run."; exit 1; }
 }
 print_message() {
-    echo "======================================"
-    echo "$1"
-    echo "======================================"
+    echo -ne "
+          ======================================
+          $1
+          ======================================
+    "
 }
 
 update_system() {
