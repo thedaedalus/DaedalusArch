@@ -366,6 +366,7 @@ setup_dotfiles() {
     mv ~/.bashrc ~/.bashrc_backup_$(date +%s)
     mv ~/.config/kitty/kitty.conf ~/.config/kitty/kitty.conf_backup_$(date +%s)
     mv ~/.config/eza/theme.yml ~/.config/eza/theme_backup_$(date +%s)
+    mv ~/.config/kitty/dank-theme.conf ~/.config/kitty/dank-theme.conf_backup_$(date +%s)
     mv ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc_backup_$(date +%s)
     mv ~/.config/niri/config.kdl ~/.config/niri/config.kdl_backup_$(date +%s)
     mv ~/.config/starship.toml ~/.config/starship.toml_backup_$(date +%s)
