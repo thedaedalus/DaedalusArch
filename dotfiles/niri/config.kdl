@@ -120,13 +120,13 @@ overview {
 // See the binds section below for more spawn examples.
 // This line starts waybar, a commonly used bar for Wayland compositors.
 spawn-at-startup "bash" "-c" "wl-paste --watch cliphist store &"
-spawn-at-startup "dms" "run"
 spawn-at-startup "/usr/lib/mate-polkit/polkit-mate-authentication-agent-1"
+spawn-at-startup "dms" "run"
 environment {
   XDG_CURRENT_DESKTOP "niri"
   XDG_SESSION_TYPE "wayland"
   QT_QPA_PLATFORM "wayland;xcb"
-  QT_QPA_PLATFORMTHEME "qt5ct"
+  QT_QPA_PLATFORMTHEME "qt6ct"
   QT_QPA_PLATFORMTHEME_QT6 "qt6ct"
   ELECTRON_OZONE_PLATFORM_HINT "wayland"
   MOZ_ENABLE_WAYLAND "1"

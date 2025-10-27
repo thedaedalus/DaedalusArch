@@ -320,6 +320,7 @@ install_extra_packages() {
             starship
             kitty
             ghostty
+            qt6-multimedia
             nano
     )
 
