@@ -100,14 +100,14 @@ add_specific_repo() {
     if [ $is_isa_supported -eq 0 ]; then
         echo "${isa_level} is supported"
 
-        cp $pacman_conf $pacman_conf_cachyos
-        gawk -i inplace -f $gawk_script $pacman_conf_cachyos || true
+        sudo cp $pacman_conf $pacman_conf_cachyos
+        sudo gawk -i inplace -f $gawk_script $pacman_conf_cachyos || true
 
         echo "Backup old config"
-        mv $pacman_conf $pacman_conf_path_backup
+        sudo mv $pacman_conf $pacman_conf_path_backup
 
         echo "CachyOS ${repo_name} Repo changed"
-        mv $pacman_conf_cachyos $pacman_conf
+        sudo mv $pacman_conf_cachyos $pacman_conf
     else
         echo "${isa_level} is not supported"
     fi
@@ -158,7 +158,7 @@ install_repos() {
             add_specific_repo x86-64-v3 ./install-repo.awk cachyos-v3
         fi
     else
-        info "Repo is already added!"
+        echo "Repo is already added!"
     fi
 
     sudo pacman-key --keyserver hkps://keyserver.ubuntu.com --recv-keys 3056513887B78AEB
