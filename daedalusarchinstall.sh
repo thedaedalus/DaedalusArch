@@ -148,11 +148,14 @@ install_repos() {
     local is_znver_supported="$(check_supported_znver45)"
     if [ $is_repo_added -ne 0 ] || [ $is_repo_commented -ne 0 ]; then
         if [ $is_znver_supported -eq 0 ]; then
-            add_specific_repo x86-64-v4 ./cachyos-repo/install-znver4-repo.awk cachyos-znver4
+            cd cachyos-repo
+            add_specific_repo x86-64-v4 ./install-znver4-repo.awk cachyos-znver4
         elif [ $is_isa_v4_supported -eq 0 ]; then
-            add_specific_repo x86-64-v4 ./cachyos-repo/install-v4-repo.awk cachyos-v4
+            cd cachyos-repo
+            add_specific_repo x86-64-v4 ./install-v4-repo.awk cachyos-v4
         else
-            add_specific_repo x86-64-v3 ./cachyos-repo/install-repo.awk cachyos-v3
+            cd cachyos-repo
+            add_specific_repo x86-64-v3 ./install-repo.awk cachyos-v3
         fi
     else
         info "Repo is already added!"
