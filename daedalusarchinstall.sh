@@ -478,6 +478,7 @@ install_greeter() {
     paru -S --noconfirm --needed --skipreview --sudoloop greetd-dms-greeter-git
     sudo systemctl enable greetd
     sudo usermod -aG greeter $USER
+    tmp_conf="$(mktemp)"
     cat > "$tmp_conf" <<EOF
 [terminal]
 vt = 1
