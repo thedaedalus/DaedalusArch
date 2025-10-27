@@ -221,7 +221,7 @@ install_extra_packages() {
             fzf
             ttf-meslo-nerd
             ttf-jetbrains-mono-nerd
-            ttf-caskaydia-nerd
+            ttf-cascadia-mono-nerd
             zoxide
             ripgrep
             bash-completion
@@ -353,6 +353,8 @@ install_danklinux() {
     require_cmd curl
     require_cmd sh
     require_cmd mktemp
+    require_cmd sha256sum
+    require_cmd gunzip
 
     # Colors for output
     RED='\033[0;31m'
