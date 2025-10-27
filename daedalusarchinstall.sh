@@ -134,7 +134,7 @@ install_repos() {
 
     local mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
 
-    pacman -U "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
+    sudo pacman -U "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
               "${mirror_url}/cachyos-mirrorlist-22-1-any.pkg.tar.zst"    \
               "${mirror_url}/cachyos-v3-mirrorlist-22-1-any.pkg.tar.zst" \
               "${mirror_url}/cachyos-v4-mirrorlist-22-1-any.pkg.tar.zst"  \
