@@ -64,53 +64,98 @@ update_system() {
     fi
 }
 
+check_supported_isa_level() {
+    /lib/ld-linux-x86-64.so.2 --help | grep "$1 (supported, searched)" > /dev/null
+    echo $?
+}
+
+check_supported_znver45() {
+    gcc -march=native -Q --help=target 2>&1 | grep 'march' | grep -E '(znver4|znver5)' > /dev/null
+    echo $?
+}
+
+check_if_repo_was_added() {
+    cat /etc/pacman.conf | grep "(cachyos\|cachyos-v3\|cachyos-core-v3\|cachyos-extra-v3\|cachyos-testing-v3\|cachyos-v4\|cachyos-core-v4\|cachyos-extra-v4\|cachyos-znver4\|cachyos-core-znver4\|cachyos-extra-znver4)" > /dev/null
+    echo $?
+}
+
+check_if_repo_was_commented() {
+    cat /etc/pacman.conf | grep "cachyos\|cachyos-v3\|cachyos-core-v3\|cachyos-extra-v3\|cachyos-testing-v3\|cachyos-v4\|cachyos-core-v4\|cachyos-extra-v4\|cachyos-znver4\|cachyos-core-znver4\|cachyos-extra-znver4" | grep -v "#\[" | grep "\[" > /dev/null
+    echo $?
+}
+
+add_specific_repo() {
+    local isa_level="$1"
+    local gawk_script="$2"
+    local repo_name="$3"
+    local cmd_check="check_supported_isa_level ${isa_level}"
+
+    local pacman_conf="/etc/pacman.conf"
+    local pacman_conf_cachyos="./pacman.conf"
+    local pacman_conf_path_backup="/etc/pacman.conf.bak"
+
+    local is_isa_supported="$(eval ${cmd_check})"
+    if [ $is_isa_supported -eq 0 ]; then
+        info "${isa_level} is supported"
+
+        cp $pacman_conf $pacman_conf_cachyos
+        gawk -i inplace -f $gawk_script $pacman_conf_cachyos || true
+
+        info "Backup old config"
+        mv $pacman_conf $pacman_conf_path_backup
+
+        info "CachyOS ${repo_name} Repo changed"
+        mv $pacman_conf_cachyos $pacman_conf
+    else
+        info "${isa_level} is not supported"
+    fi
+}
+
 install_repos() {
     print_message "Setting up CachyOS & Chaotic AUR repositories..."
     require_cmd curl
     require_cmd tar
     require_cmd find
-
-    tmpdir="$(mktemp -d)"
-    _tmpfiles+=("$tmpdir")
-    pushd "$tmpdir" >/dev/null
-
+    
     repo_url="https://mirror.cachyos.org/cachyos-repo.tar.xz"
     echo "Downloading ${repo_url}..."
     if ! curl -fLO "$repo_url"; then
         echo "Failed to download CachyOS repo archive from $repo_url"
-        popd >/dev/null
         return 1
     fi
-
-    echo "Extracting archive..."
+    
     if ! tar -xf cachyos-repo.tar.xz; then
         echo "Failed to extract cachyos-repo.tar.xz"
-        popd >/dev/null
         return 1
     fi
+    
+    sudo pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
+    sudo pacman-key --lsign-key F3B607488DB35A47
 
-    # Try to find the installer script anywhere in the extracted tree
-    SCRIPT_PATH="$(find . -type f -iname 'cachyos-repo.sh' | head -n1 || true)"
-    if [[ -z "$SCRIPT_PATH" ]]; then
-        echo "cachyos-repo.sh not found in archive. Listing extracted files for inspection:"
-        # show the extracted tree to help debugging
-        find . -maxdepth 3 -print
-        popd >/dev/null
-        return 1
+    local mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
+
+    pacman -U "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
+              "${mirror_url}/cachyos-mirrorlist-22-1-any.pkg.tar.zst"    \
+              "${mirror_url}/cachyos-v3-mirrorlist-22-1-any.pkg.tar.zst" \
+              "${mirror_url}/cachyos-v4-mirrorlist-22-1-any.pkg.tar.zst"  \
+              "${mirror_url}/pacman-7.0.0.r7.g1f38429-1-x86_64.pkg.tar.zst"
+
+    local is_repo_added="$(check_if_repo_was_added)"
+    local is_repo_commented="$(check_if_repo_was_commented)"
+    local is_isa_v4_supported="$(check_supported_isa_level x86-64-v4)"
+    local is_znver_supported="$(check_supported_znver45)"
+    if [ $is_repo_added -ne 0 ] || [ $is_repo_commented -ne 0 ]; then
+        if [ $is_znver_supported -eq 0 ]; then
+            add_specific_repo x86-64-v4 ./cachyos-repo/install-znver4-repo.awk cachyos-znver4
+        elif [ $is_isa_v4_supported -eq 0 ]; then
+            add_specific_repo x86-64-v4 ./cachyos-repo/install-v4-repo.awk cachyos-v4
+        else
+            add_specific_repo x86-64-v3 ./cachyos-repo/install-repo.awk cachyos-v3
+        fi
+    else
+        info "Repo is already added!"
     fi
 
-    echo "Found installer at: $SCRIPT_PATH"
-    chmod +x "$SCRIPT_PATH"
-
-    # Run the script with sudo (script may require root)
-    echo "Running $SCRIPT_PATH (with sudo)..."
-    if ! sudo "$SCRIPT_PATH"; then
-        echo "Execution of $SCRIPT_PATH failed"
-        popd >/dev/null
-        return 1
-    fi
-
-    # Continue with key import and chaotic repo setup
     sudo pacman-key --keyserver hkps://keyserver.ubuntu.com --recv-keys 3056513887B78AEB
     sudo pacman-key --lsign-key 3056513887B78AEB
 
@@ -123,11 +168,8 @@ install_repos() {
         echo "chaotic-aur already configured in /etc/pacman.conf"
     fi
 
-    popd >/dev/null
+   
 }
-
-
-
 
 install_packages() {
     print_message "Installing essential packages..."
@@ -145,7 +187,6 @@ install_packages() {
         sudo pacman -S --noconfirm --needed "$package"
     done
 
-    # Ensure paru exists: prefer pacman if paru available in configured repos, else build it if AUR helper needed.
     if ! command -v paru >/dev/null 2>&1; then
         print_message "paru not found. Attempting to build paru from AUR (requires base-devel and git)."
         tmpdir="$(mktemp -d)"
@@ -302,47 +343,88 @@ setup_pacman() {
 }
 
 install_danklinux() {
-    print_message "Installing DankLinux installer (https://install.danklinux.com)..."
+    print_message "Installing Dank Material Shell..."
 
     require_cmd curl
     require_cmd sh
     require_cmd mktemp
 
-    if [ "$(id -u)" -eq 0 ]; then
-        if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-            RUN_AS_USER="$SUDO_USER"
-        else
-            echo "Refusing to run the DankLinux installer as root and cannot detect a non-root user to switch to."
-            echo "Run the wrapper script as a normal user (it will use sudo internally when needed), or export SUDO_USER."
-            return 1
-        fi
-    else
-        RUN_AS_USER="$(id -un)"
+    # Colors for output
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    NC='\033[0m' # No Color
+    
+    # Check if running on Linux
+    if [ "$(uname)" != "Linux" ]; then
+        printf "%bError: This installer only supports Linux systems%b\n" "$RED" "$NC"
+        exit 1
     fi
-
-    tmpfile="$(mktemp -t dankinstaller.XXXXXX.sh)"
-    _tmpfiles+=("$tmpfile")
-    if ! curl -fsSL "https://install.danklinux.com" -o "$tmpfile"; then
-        echo "Failed to download https://install.danklinux.com"
-        return 1
+    
+    # Detect architecture
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)
+            ARCH="amd64"
+            ;;
+        aarch64)
+            ARCH="arm64"
+            ;;
+        *)
+            printf "%bError: Unsupported architecture: %s%b\n" "$RED" "$ARCH" "$NC"
+            printf "This installer only supports x86_64 (amd64) and aarch64 (arm64) architectures\n"
+            exit 1
+            ;;
+    esac
+    
+    # Get the latest release version
+    LATEST_VERSION=$(curl -s https://api.github.com/repos/AvengeMedia/danklinux/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    
+    if [ -z "$LATEST_VERSION" ]; then
+        printf "%bError: Could not fetch latest version%b\n" "$RED" "$NC"
+        exit 1
     fi
-    chmod +x "$tmpfile"
-
-    if [ "$(id -u)" -eq 0 ]; then
-        echo "Running DankLinux installer as user: $RUN_AS_USER"
-        if ! sudo -u "$RUN_AS_USER" -- sh "$tmpfile"; then
-            echo "DankLinux installer failed when run as $RUN_AS_USER"
-            return 1
-        fi
-    else
-        echo "Running DankLinux installer as current user: $RUN_AS_USER"
-        if ! sh "$tmpfile"; then
-            echo "DankLinux installer failed"
-            return 1
-        fi
+    
+    printf "%bInstalling Dankinstall %s for %s...%b\n" "$GREEN" "$LATEST_VERSION" "$ARCH" "$NC"
+    
+    # Download and install
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR" || exit 1
+    
+    # Download the gzipped binary and its checksum
+    printf "%bDownloading installer...%b\n" "$GREEN" "$NC"
+    curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz" -o "installer.gz"
+    curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz.sha256" -o "expected.sha256"
+    
+    # Get the expected checksum
+    EXPECTED_CHECKSUM=$(cat expected.sha256 | awk '{print $1}')
+    
+    # Calculate actual checksum
+    printf "%bVerifying checksum...%b\n" "$GREEN" "$NC"
+    ACTUAL_CHECKSUM=$(sha256sum installer.gz | awk '{print $1}')
+    
+    # Compare checksums
+    if [ "$EXPECTED_CHECKSUM" != "$ACTUAL_CHECKSUM" ]; then
+        printf "%bError: Checksum verification failed%b\n" "$RED" "$NC"
+        printf "Expected: %s\n" "$EXPECTED_CHECKSUM"
+        printf "Got:      %s\n" "$ACTUAL_CHECKSUM"
+        printf "The downloaded file may be corrupted or tampered with\n"
+        cd - > /dev/null
+        rm -rf "$TEMP_DIR"
+        exit 1
     fi
-
-    echo "DankLinux installer finished successfully (or returned control)."
+    
+    # Decompress the binary
+    printf "%bDecompressing installer...%b\n" "$GREEN" "$NC"
+    gunzip installer.gz
+    chmod +x installer
+    
+    # Execute the installer
+    printf "%bRunning installer...%b\n" "$GREEN" "$NC"
+    ./installer
+    
+    # Cleanup
+    cd - > /dev/null
+    rm -rf "$TEMP_DIR"     
     return 0
 }
 
