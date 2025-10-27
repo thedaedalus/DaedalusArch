@@ -472,8 +472,10 @@ install_danklinux() {
 }
 
 install_greeter() {
-    dms greeter install
+    paru -S greetd-dms-greeter-git
+    sudo systemctl disable gdm sddm lightdm
     sudo systemctl enable greetd
+    sudo usermod -aG greeter $USER
 }
 
 check_virtual_system() {
