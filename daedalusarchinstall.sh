@@ -136,7 +136,7 @@ install_repos() {
 
     local mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
 
-    sudo pacman -U "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
+    sudo pacman -U --noconfirm "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
               "${mirror_url}/cachyos-mirrorlist-22-1-any.pkg.tar.zst"    \
               "${mirror_url}/cachyos-v3-mirrorlist-22-1-any.pkg.tar.zst" \
               "${mirror_url}/cachyos-v4-mirrorlist-22-1-any.pkg.tar.zst"  \
@@ -266,7 +266,6 @@ install_extra_packages() {
             breeze-icons
             breeze
             starship
-            cachyos-gaming-applications
             kitty
             ghostty
             nano
@@ -274,6 +273,17 @@ install_extra_packages() {
 
     for package in "${EXTRA_PACKAGES[@]}"; do
             paru -S --noconfirm --needed --skipreview --sudoloop "$package"
+    done
+}
+
+install_gamining_applications() {
+    print_message "Installing gaming tools..."
+    GAMING_PACKAGES=(
+        cachyos-gaming-applications
+    )
+
+    for package in "${GAMING_PACKAGES[@]}"; do
+        paru -S --noconfirm --needed --skipreview --sudoloop "$package"
     done
 }
 
@@ -436,14 +446,59 @@ install_danklinux() {
     return 0
 }
 
+check_virtual_system() {
+    if command -v systemd-detect-virt >/dev/null 2>&1; then
+        if systemd-detect-virt --quiet; then
+            return 0  # Inside a virtual machine
+        else
+            return 1  # Not inside a virtual machine
+        fi
+    else
+        return 1  # Assume not in VM if command not found
+    fi
+}
+
+install_qemu_guest_tools() {
+    print_message "Installing QEMU Guest Tools..."
+    sudo pacman -S --noconfirm --needed qemu-guest-agent spice-vdagent vulkan-virtio lib32-vulkan-virtio
+    sudo systemctl enable qemu-guest-agent.service
+}
+
+install_virtualbox_guest_additions() {
+    print_message "Installing VirtualBox Guest Additions..."
+    sudo pacman -S --noconfirm --needed virtualbox-guest-utils virtualbox-guest-dkms linux-headers
+    sudo systemctl enable vboxservice.service
+}
+install_vmware_tools() {
+    print_message "Installing VMware Tools..."
+    sudo pacman -S --noconfirm --needed open-vm-tools
+    sudo systemctl enable vmtoolsd.service
+    sudo systemctl enable vmware-vmblock-fuse.service
+}
 
 logo
 setup_pacman
 install_repos
 update_system
+vm_type="$(check_virtual_system)"    # returns "", "kvm", "virtualbox", "vmware", etc.
+if [ -n "$vm_type" ]; then
+    print_message "Running in VM: $vm_type"
+    case "$vm_type" in
+        kvm|qemu) install_qemu_guest_tools ;;
+        virtualbox) install_virtualbox_guest_additions ;;
+        vmware) install_vmware_tools ;;
+        *) echo "Unknown VM type: $vm_type; skipping guest tools" >&2 ;;
+    esac
+fi
 install_packages
-install_extra_packages
 install_danklinux
+install_extra_packages
+read -r -p "Do you want to install gaming applications? (y/n): " GAMING_CHOICE
+if [[ "$GAMING_CHOICE" =~ ^[Yy]$ ]]; then
+    install_gamining_applications
+else
+    echo "Skipping gaming applications installation."
+fi
 xdg-user-dirs-update
 install_wallpapers
 setup_dotfiles
