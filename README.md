@@ -171,7 +171,7 @@ git clone https://github.com/orangci/walls-catppuccin-mocha.git
 8. Install Firefox theme
 
 ```bash
-sudo pywalfox install
+sudo pywalfox install -g --verbose
 ```
 
 9. Restart DMS

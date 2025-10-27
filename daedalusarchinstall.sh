@@ -471,6 +471,11 @@ install_danklinux() {
     return 0
 }
 
+install_greeter() {
+    dms greeter install
+    sudo systemctl enable greetd
+}
+
 check_virtual_system() {
     # Preferred: systemd-detect-virt
     if command -v systemd-detect-virt >/dev/null 2>&1; then
@@ -526,12 +531,12 @@ install_vmware_tools() {
     sudo systemctl enable vmware-vmblock-fuse.service
 }
 
-logo
-setup_pacman
-install_repos
-update_system
+install_pywalfox() {
+    print_message "installing firefox theme with pywalfox..."
+    sudo pywalfox install -g --verbose
+}
 
-
+check_virtual() {
 vm_type="$(check_virtual_system 2>/dev/null || true)"
 
 if [ -n "$vm_type" ]; then
@@ -567,18 +572,30 @@ if [ -n "$vm_type" ]; then
 else
     echo "No virtual machine detected; skipping guest tools."
 fi
+}
+
+logo
+setup_pacman
+install_repos
+update_system
+check_virtual
 install_packages
 install_danklinux
+install_greeter
 install_extra_packages
+
 read -r -p "Do you want to install gaming applications? (y/n): " GAMING_CHOICE
 if [[ "$GAMING_CHOICE" =~ ^[Yy]$ ]]; then
     install_gamining_applications
 else
     echo "Skipping gaming applications installation."
 fi
+
 xdg-user-dirs-update
 install_wallpapers
 setup_dotfiles
+install_pywalfox
+
 print_message "Post-installation script completed successfully!"
 echo "Please reboot your system to apply all changes."
 echo "Reboot now? (y/n)"
