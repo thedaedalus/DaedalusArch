@@ -98,18 +98,18 @@ add_specific_repo() {
 
     local is_isa_supported="$(eval ${cmd_check})"
     if [ $is_isa_supported -eq 0 ]; then
-        info "${isa_level} is supported"
+        echo "${isa_level} is supported"
 
         cp $pacman_conf $pacman_conf_cachyos
         gawk -i inplace -f $gawk_script $pacman_conf_cachyos || true
 
-        info "Backup old config"
+        echo "Backup old config"
         mv $pacman_conf $pacman_conf_path_backup
 
-        info "CachyOS ${repo_name} Repo changed"
+        echo "CachyOS ${repo_name} Repo changed"
         mv $pacman_conf_cachyos $pacman_conf
     else
-        info "${isa_level} is not supported"
+        echo "${isa_level} is not supported"
     fi
 }
 
