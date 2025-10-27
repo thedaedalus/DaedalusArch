@@ -447,15 +447,41 @@ install_danklinux() {
 }
 
 check_virtual_system() {
+    # Preferred: systemd-detect-virt
     if command -v systemd-detect-virt >/dev/null 2>&1; then
-        if systemd-detect-virt --quiet; then
-            return 0  # Inside a virtual machine
-        else
-            return 1  # Not inside a virtual machine
+        vm="$(systemd-detect-virt 2>/dev/null || true)"
+        # systemd-detect-virt may print "none" for no virtualization
+        if [ -n "$vm" ] && [ "$vm" != "none" ]; then
+            case "$vm" in
+                kvm|qemu) echo "kvm"; return 0 ;;
+                virtualbox|oracle) echo "virtualbox"; return 0 ;;
+                vmware) echo "vmware"; return 0 ;;
+                *) echo "$vm"; return 0 ;;
+            esac
         fi
-    else
-        return 1  # Assume not in VM if command not found
     fi
+
+    # Fallback: dmidecode
+    if command -v dmidecode >/dev/null 2>&1; then
+        prod="$(dmidecode -s system-product-name 2>/dev/null || true)"
+        case "$prod" in
+            *VirtualBox*) echo "virtualbox"; return 0 ;;
+            *KVM*|*QEMU*) echo "kvm"; return 0 ;;
+            *VMware*) echo "vmware"; return 0 ;;
+        esac
+    fi
+
+    if command -v lspci >/dev/null 2>&1; then
+        if lspci 2>/dev/null | grep -qi virtualbox; then
+            echo "virtualbox"; return 0
+        fi
+        if lspci 2>/dev/null | grep -qi vmware; then
+            echo "vmware"; return 0
+        fi
+    fi
+
+    # Nothing detected
+    return 1
 }
 
 install_qemu_guest_tools() {
@@ -480,15 +506,34 @@ logo
 setup_pacman
 install_repos
 update_system
-vm_type="$(check_virtual_system)"    # returns "", "kvm", "virtualbox", "vmware", etc.
+vm_type="$(check_virtual_system 2>/dev/null || true)"    # returns "", "kvm", "virtualbox", "vmware", etc.
 if [ -n "$vm_type" ]; then
     print_message "Running in VM: $vm_type"
     case "$vm_type" in
-        kvm|qemu) install_qemu_guest_tools ;;
-        virtualbox) install_virtualbox_guest_additions ;;
-        vmware) install_vmware_tools ;;
-        *) echo "Unknown VM type: $vm_type; skipping guest tools" >&2 ;;
+        kvm|qemu)
+            if ! install_qemu_guest_tools 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
+                echo "Error: install_qemu_guest_tools failed; see /var/log/daedalus-guest-tools.log" >&2
+                return 1
+            fi
+            ;;
+        virtualbox)
+            if ! install_virtualbox_guest_additions 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
+                echo "Error: install_virtualbox_guest_additions failed; see /var/log/daedalus-guest-tools.log" >&2
+                return 1
+            fi
+            ;;
+        vmware)
+            if ! install_vmware_tools 2>&1 | tee -a /var/log/daedalus-guest-tools.log; then
+                echo "Error: install_vmware_tools failed; see /var/log/daedalus-guest-tools.log" >&2
+                return 1
+            fi
+            ;;
+        *)
+            echo "Unknown VM type: $vm_type; skipping guest tools" >&2
+            ;;
     esac
+else
+    print_message "No virtual machine detected; skipping guest tools."
 fi
 install_packages
 install_danklinux
