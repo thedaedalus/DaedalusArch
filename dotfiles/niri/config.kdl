@@ -39,9 +39,9 @@ input {
 // Find more information on the wiki:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Outputs
 // Remember to uncomment the node by removing "/-"!
-/-output "Virtual-1" {
-    mode "1920x1080"
-    variable-refresh-rate
+//output "Virtual-1" {
+//    mode "1920x1080"
+//    variable-refresh-rate
 //}
 // Settings that influence how windows are positioned and sized.
 // Find more information on the wiki:
@@ -402,10 +402,10 @@ binds {
     Mod+Ctrl+End  { move-column-to-last; }
 
     // === Monitor Navigation ===
-    Mod+Ctrl+Left  { focus-monitor-left; }
-    Mod+Ctrl+Down  { focus-monitor-down; }
-    Mod+Ctrl+Up    { focus-monitor-up; }
-    Mod+Ctrl+Right { focus-monitor-right; }
+    Mod+Alt+Left  { focus-monitor-left; }
+    Mod+Alt+Down  { focus-monitor-down; }
+    Mod+Alt+Up    { focus-monitor-up; }
+    Mod+Alt+Right { focus-monitor-right; }
 
 
     // === Move to Monitor ===
