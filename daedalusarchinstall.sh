@@ -254,7 +254,7 @@ install_extra_packages() {
             yazi
             fd
             zed
-            laygit
+            lazygit
             github-cli
             sassc
             gtk-engine-murrine
