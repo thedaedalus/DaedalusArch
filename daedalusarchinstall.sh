@@ -66,7 +66,7 @@ require_cmd() {
 print_message() {
     echo -ne "
           ======================================
-          $1
+                $1
           ======================================
     \n"
 }
@@ -208,7 +208,7 @@ install_packages() {
     done
 
     if ! command -v paru >/dev/null 2>&1; then
-        print_message "paru not found. Attempting to build paru from AUR (requires base-devel and git)."
+        echo "paru not found. Attempting to build paru from AUR (requires base-devel and git)."
         tmpdir="$(mktemp -d)"
         _tmpfiles+=("$tmpdir")
         pushd "$tmpdir" >/dev/null
@@ -327,6 +327,15 @@ setup_dotfiles() {
     LOGFILE="${LOG_DIR}/dotbot.log"
 
     mkdir -p "${LOG_DIR}"
+
+    # Backup existing files
+    mv ~/.bashrc ~/.bashrc_backup_$(date +%s)
+    mv ~/.config/kitty/kitty.conf ~/.config/kitty/kitty.conf_backup_$(date +%s)
+    mv ~/.config/eza/theme.yml ~/.config/eza/theme_backup_$(date +%s)
+    mv ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc_backup_$(date +%s)
+    mv ~/.config/niri/config.kdl ~/.config/niri/config.kdl_backup_$(date +%s)
+    mv ~/.config/starship.toml ~/.config/starship.toml_backup_$(date +%s)
+    mv ~/.config/tealdeer/config.toml ~/.config/tealdeer/config.toml_backup_$(date +%s)
 
     if [[ -d "${CLONE_DIR}" ]]; then
         echo "Directory ${CLONE_DIR} already exists, updating..."
@@ -536,17 +545,17 @@ check_virtual_system() {
 }
 
 install_qemu_guest_tools() {
-    print_message "Installing QEMU Guest Tools..."
+    echo  "Installing QEMU Guest Tools..."
     sudo pacman -S --noconfirm --needed qemu-guest-agent spice-vdagent vulkan-virtio lib32-vulkan-virtio
 }
 
 install_virtualbox_guest_additions() {
-    print_message "Installing VirtualBox Guest Additions..."
+    echo "Installing VirtualBox Guest Additions..."
     sudo pacman -S --noconfirm --needed virtualbox-guest-utils virtualbox-guest-dkms linux-headers
     sudo systemctl enable vboxservice.service
 }
 install_vmware_tools() {
-    print_message "Installing VMware Tools..."
+    echo "Installing VMware Tools..."
     sudo pacman -S --noconfirm --needed open-vm-tools
     sudo systemctl enable vmtoolsd.service
     sudo systemctl enable vmware-vmblock-fuse.service
@@ -561,7 +570,7 @@ update_system
 vm_type="$(check_virtual_system 2>/dev/null || true)"
 
 if [ -n "$vm_type" ]; then
-    print_message "Running in VM: $vm_type"
+    echo "Running in VM: $vm_type"
 
     case "$vm_type" in
         kvm|qemu)
@@ -591,7 +600,7 @@ if [ -n "$vm_type" ]; then
             ;;
     esac
 else
-    print_message "No virtual machine detected; skipping guest tools."
+    echo "No virtual machine detected; skipping guest tools."
 fi
 install_packages
 install_danklinux
