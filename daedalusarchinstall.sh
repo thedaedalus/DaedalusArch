@@ -272,7 +272,7 @@ install_extra_packages() {
     )
 
     for package in "${EXTRA_PACKAGES[@]}"; do
-       yes | paru -S --noconfirm --needed "$package"
+            paru -S  --needed "$package"
     done
 }
 
