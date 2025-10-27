@@ -14,11 +14,31 @@
 set -euo pipefail
 IFS=$'\n\t'
 LOGFILE="$HOME/daedalusarch-post-install.log"
+
+# Use tput for terminal capability-aware colors
+if command -v tput >/dev/null 2>&1; then
+    RED="$(tput setaf 1)"
+    GREEN="$(tput setaf 2)"
+    BLUE="$(tput setaf 4)"
+    CYAN="$(tput setaf 6)"
+    MAGENTA="$(tput setaf 5)"
+    YELLOW="$(tput setaf 3)"
+    RESET="$(tput sgr0)"
+else
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    MAGENTA='\033[0;35m'
+    YELLOW='\033[0;33m'
+    RESET='\033[0m'
+fi
+
 if [[ $EUID -ne 0 ]]; then
     echo "This script must be run with root privileges (sudo). You will be prompted for sudo when needed."
 fi
 logo() {
-    echo -ne "
+    printf '%b\n' "${CYAN}
           =========================================================================================================
           ▓█████▄  ▄▄▄      ▓█████ ▓█████▄  ▄▄▄       ██▓     █    ██   ██████  ▄▄▄       ██▀███   ▄████▄   ██░ ██
           ▒██▀ ██▌▒████▄    ▓█   ▀ ▒██▀ ██▌▒████▄    ▓██▒     ██  ▓██▒▒██    ▒ ▒████▄    ▓██ ▒ ██▒▒██▀ ▀█  ▓██░ ██▒
@@ -33,7 +53,7 @@ logo() {
 
                                                 Post install script for Arch Linux
           ==========================================================================================================
-    \n"
+    ${RESET}"
 
 }
 is_sourced() {
@@ -64,11 +84,11 @@ require_cmd() {
     command -v "$1" >/dev/null 2>&1 || { echo "Required command '$1' not found. Please install it and re-run."; exit 1; }
 }
 print_message() {
-    echo -ne "
+    printf '%b\n' "${MAGENTA}
           ======================================
-                $1
+          $1
           ======================================
-    \n"
+    ${RESET}"
 }
 
 update_system() {
@@ -474,7 +494,7 @@ install_danklinux() {
 install_greeter() {
     print_message "Installing greetd and dms-greeter..."
     GREETD_CONF="/etc/greetd/config.toml"
-    GREETER_CMD="/usr/local/bin/dms-greeter --command niri"
+    GREETER_CMD="dms-greeter --command niri"
     paru -S --noconfirm --needed --skipreview --sudoloop greetd-dms-greeter-git
     sudo systemctl enable greetd
     sudo usermod -aG greeter $USER
@@ -505,7 +525,6 @@ check_virtual_system() {
     # Preferred: systemd-detect-virt
     if command -v systemd-detect-virt >/dev/null 2>&1; then
         vm="$(systemd-detect-virt 2>/dev/null || true)"
-        # systemd-detect-virt may print "none" for no virtualization
         if [ -n "$vm" ] && [ "$vm" != "none" ]; then
             case "$vm" in
                 kvm|qemu) echo "kvm"; return 0 ;;
