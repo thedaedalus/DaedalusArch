@@ -486,12 +486,17 @@ vt = 1
 user = "greeter"
 command = "${GREETER_CMD}"
 EOF
+
 if [ ! -f "$GREETD_CONF" ] || ! cmp -s "$tmp_conf" "$GREETD_CONF"; then
     sudo cp -n "$GREETD_CONF" "${GREETD_CONF}.bak" 2>/dev/null || true
     sudo mv "$tmp_conf" "$GREETD_CONF"
     sudo chown root:root "$GREETD_CONF" 2>/dev/null || true
     sudo chmod 0644 "$GREETD_CONF" 2>/dev/null || true
     echo "Wrote $GREETD_CONF (greeter command: ${GREETER_CMD})"
+else
+    rm -f "$tmp_conf"
+    echo "$GREETD_CONF is already configured correctly; no changes made."
+fi
 }
 
 
