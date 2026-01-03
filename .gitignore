@@ -3,6 +3,7 @@
 .dotter/cache/
 .vscode/
 .DS_Store
+.zed/
 build/
 dist/
 __pycache__/
