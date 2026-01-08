@@ -190,12 +190,17 @@ install_repos() {
     sudo pacman-key --lsign-key F3B607488DB35A47
 
     local mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
+    local keyring_latest=$(curl -s https://mirror.cachyos.org/repo/x86_64/cachyos/ | grep -o 'cachyos-keyring-[0-9]\+\.[0-9]\+-[0-9]\+-any\.pkg\.tar\.zst' | head -1)
+    local mirrorlist_latest=$(curl -s https://mirror.cachyos.org/repo/x86_64/cachyos/ | grep -o 'cachyos-mirrorlist-[0-9]\+\.[0-9]\+-[0-9]\+-any\.pkg\.tar\.zst' | head -1)
+    local v3_mirrorlist_latest=$(curl -s https://mirror.cachyos.org/repo/x86_64/cachyos/ | grep -o 'cachyos-v3-mirrorlist-[0-9]\+\.[0-9]\+-[0-9]\+-any\.pkg\.tar\.zst' | head -1)
+    local v4_mirrorlist_latest=$(curl -s https://mirror.cachyos.org/repo/x86_64/cachyos/ | grep -o 'cachyos-v4-mirrorlist-[0-9]\+\.[0-9]\+-[0-9]\+-any\.pkg\.tar\.zst' | head -1)
+    local pacman_latest=$(curl -s https://mirror.cachyos.org/repo/x86_64/cachyos/ | grep -o 'pacman-[0-9]\+\.[0-9]\+\.[0-9]\+-[0-9]\+-x86_64\.pkg\.tar\.zst' | head -1)
 
-    sudo pacman -U --noconfirm "${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
-              "${mirror_url}/cachyos-mirrorlist-22-1-any.pkg.tar.zst"    \
-              "${mirror_url}/cachyos-v3-mirrorlist-22-1-any.pkg.tar.zst" \
-              "${mirror_url}/cachyos-v4-mirrorlist-22-1-any.pkg.tar.zst"  \
-              "${mirror_url}/pacman-7.0.0.r7.g1f38429-1-x86_64.pkg.tar.zst"
+    sudo pacman -U --noconfirm "${mirror_url}/${keyring_latest}" \
+              "${mirror_url}/${mirrorlist_latest}"    \
+              "${mirror_url}/${v3_mirrorlist_latest}" \
+              "${mirror_url}/${v4_mirrorlist_latest}" \
+              "${mirror_url}/${pacman_latest}"
 
     local is_repo_added="$(check_if_repo_was_added)"
     local is_repo_commented="$(check_if_repo_was_commented)"
@@ -369,14 +374,14 @@ setup_dotfiles() {
     mkdir -p "${LOG_DIR}"
 
     # Backup existing files
-    mv ~/.bashrc ~/.bashrc_backup_$(date +%s)
-    mv ~/.config/kitty/kitty.conf ~/.config/kitty/kitty.conf_backup_$(date +%s)
-    mv ~/.config/eza/theme.yml ~/.config/eza/theme_backup_$(date +%s)
-    mv ~/.config/kitty/dank-theme.conf ~/.config/kitty/dank-theme.conf_backup_$(date +%s)
-    mv ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc_backup_$(date +%s)
-    mv ~/.config/niri/config.kdl ~/.config/niri/config.kdl_backup_$(date +%s)
-    mv ~/.config/starship.toml ~/.config/starship.toml_backup_$(date +%s)
-    mv ~/.config/tealdeer/config.toml ~/.config/tealdeer/config.toml_backup_$(date +%s)
+    [ -f ~/.bashrc ] && mv ~/.bashrc ~/.bashrc_backup_$(date +%s)
+    [ -f ~/.config/kitty/kitty.conf ] && mv ~/.config/kitty/kitty.conf ~/.config/kitty/kitty.conf_backup_$(date +%s)
+    [ -f ~/.config/eza/theme.yml ] && mv ~/.config/eza/theme.yml ~/.config/eza/theme_backup_$(date +%s)
+    [ -f ~/.config/kitty/dank-theme.conf ] && mv ~/.config/kitty/dank-theme.conf ~/.config/kitty/dank-theme.conf_backup_$(date +%s)
+    [ -f ~/.config/fastfetch/config.jsonc ] && mv ~/.config/fastfetch/config.jsonc ~/.config/fastfetch/config.jsonc_backup_$(date +%s)
+    [ -f ~/.config/niri/config.kdl ] && mv ~/.config/niri/config.kdl ~/.config/niri/config.kdl_backup_$(date +%s)
+    [ -f ~/.config/starship.toml ] && mv ~/.config/starship.toml ~/.config/starship.toml_backup_$(date +%s)
+    [ -f ~/.config/tealdeer/config.toml ] && mv ~/.config/tealdeer/config.toml ~/.config/tealdeer/config.toml_backup_$(date +%s)
 
     if [[ -d "${CLONE_DIR}" ]]; then
         warn "Directory ${CLONE_DIR} already exists, updating..."
@@ -428,19 +433,27 @@ setup_pacman() {
 }
 
 install_danklinux() {
-    print_message "Installing Dank Material Shell..."
-
-    require_cmd curl
-    require_cmd sh
-    require_cmd mktemp
-    require_cmd sha256sum
-    require_cmd gunzip
 
     # Check if running on Linux
     if [ "$(uname)" != "Linux" ]; then
         error "Error: This installer only supports Linux systems"
         exit 1
     fi
+
+    # Check if Dank Linux is already installed
+    if command -v dankinstall >/dev/null 2>&1; then
+        warn "Dank Linux already installed, skipping."
+        return 0
+    fi
+
+    print_message "Installing Dank Material Shell..."
+
+    require_cmd curl
+    require_cmd sh
+    require_cmd sha256sum
+    require_cmd gunzip
+    require_cmd mktemp
+
 
     # Detect architecture
     ARCH=$(uname -m)
@@ -452,14 +465,14 @@ install_danklinux() {
             ARCH="arm64"
             ;;
         *)
-            error "Error: Unsupported architecture: $ARCH"
-            msg "This installer only supports x86_64 (amd64) and aarch64 (arm64) architectures"
-            exit 1
-            ;;
+            *)
+                error "Unsupported architecture: $ARCH. Please install Dank Linux manually."
+                return 1
+                ;;
     esac
 
     # Get the latest release version
-    LATEST_VERSION=$(curl -s https://api.github.com/repos/AvengeMedia/danklinux/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    LATEST_VERSION=$(curl -s "https://api.github.com/repos/AvengeMedia/danklinux/releases/latest" | jq -r '.tag_name' 2>/dev/null || echo "")
 
     if [ -z "$LATEST_VERSION" ]; then
         error "Error: Could not fetch latest version"
@@ -470,12 +483,21 @@ install_danklinux() {
 
     # Download and install
     TEMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TEMP_DIR"' EXIT
     cd "$TEMP_DIR" || exit 1
 
     # Download the gzipped binary and its checksum
     info "Downloading installer..."
-    curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz" -o "installer.gz"
-    curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz.sha256" -o "expected.sha256"
+    if ! curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz" -o "installer.gz"; then
+        error "Download failed"
+        return 1
+    fi
+    info "Downloading checksum..."
+    if ! curl -L "https://github.com/AvengeMedia/danklinux/releases/download/$LATEST_VERSION/dankinstall-$ARCH.gz.sha256" -o "expected.sha256"; then
+        error "Download failed"
+        return 1
+    fi
+
 
     # Get the expected checksum
     EXPECTED_CHECKSUM=$(cat expected.sha256 | awk '{print $1}')

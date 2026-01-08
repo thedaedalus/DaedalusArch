@@ -26,7 +26,7 @@ This is my setup of Arch without needing to install the full CachyOS distro but 
 ### Run the install script
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/thedaedalus/DaedalusArch/main/daedalusarchinstall.sh | bash
 ```
 
 ## Manual Install Steps

@@ -7,6 +7,10 @@
 build/
 dist/
 __pycache__/
+.env
+secrets.json
+*.bak
+*.backup
 *.pyc
 *.pyo
 *.pyd
