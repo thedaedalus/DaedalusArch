@@ -465,7 +465,6 @@ install_danklinux() {
             ARCH="arm64"
             ;;
         *)
-            *)
                 error "Unsupported architecture: $ARCH. Please install Dank Linux manually."
                 return 1
                 ;;
