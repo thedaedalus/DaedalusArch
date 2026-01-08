@@ -475,14 +475,13 @@ install_danklinux() {
 
     if [ -z "$LATEST_VERSION" ]; then
         error "Error: Could not fetch latest version"
-        exit 1
+        return 1
     fi
 
     info "Installing Dankinstall $LATEST_VERSION for $ARCH..."
 
     # Download and install
     TEMP_DIR=$(mktemp -d)
-    trap 'rm -rf "$TEMP_DIR"' EXIT
     cd "$TEMP_DIR" || exit 1
 
     # Download the gzipped binary and its checksum
@@ -513,7 +512,7 @@ install_danklinux() {
         msg "The downloaded file may be corrupted or tampered with"
         cd - > /dev/null
         rm -rf "$TEMP_DIR"
-        exit 1
+        return 1
     fi
 
     # Decompress the binary
